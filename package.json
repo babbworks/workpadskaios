@@ -1,0 +1,13 @@
+{
+  "name": "workpadskaios",
+  "version": "0.1.0",
+  "description": "Workpads mobile app for KaiOS",
+  "private": true,
+  "scripts": {
+    "start": "npx serve . -p 3000 --no-clipboard",
+    "test":  "node test/flow.test.js"
+  },
+  "dependencies": {
+    "@workpads/codec": "file:../workpads-codec"
+  }
+}

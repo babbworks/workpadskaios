@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Workpads</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+  <!-- ── Onboarding ──────────────────────────────────────────────────────── -->
+  <div id="screen-onboarding" class="screen">
+    <div class="header">
+      <span class="header-title">Welcome</span>
+    </div>
+    <div class="content" style="padding:16px;">
+      <div style="margin-bottom:16px; font-size:13px; color:var(--text-muted); line-height:1.6;">
+        Workpads helps you create and share job records from your phone.
+      </div>
+      <div class="field-group">
+        <div class="field-label">Your name *</div>
+        <input class="field-input" id="onboard-name" type="text"
+          placeholder="e.g. Alice Smith" autocomplete="off">
+      </div>
+      <div class="field-group" style="margin-top:4px;">
+        <div class="field-label">Phone / WhatsApp (optional)</div>
+        <input class="field-input" id="onboard-phone" type="tel"
+          placeholder="e.g. +44 7700 900123" autocomplete="off">
+      </div>
+      <div style="margin-top:8px; font-size:11px; color:var(--text-muted);">
+        Name appears on records you create.
+      </div>
+    </div>
+    <div class="softkeys">
+      <span class="sk-lsk"></span>
+      <span class="sk-csk">Continue</span>
+      <span class="sk-rsk"></span>
+    </div>
+  </div>
+
+  <!-- ── Main record list ─────────────────────────────────────────────────── -->
+  <div id="screen-list" class="screen active">
+    <div class="header">
+      <span class="header-title">Workpads</span>
+      <span class="header-badge" id="list-count"></span>
+    </div>
+    <div class="content" id="list-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Manage</span>
+      <span class="sk-csk">Open</span>
+      <span class="sk-rsk">New</span>
+    </div>
+  </div>
+
+  <!-- ── PADS Wizard ──────────────────────────────────────────────────────── -->
+  <div id="screen-wizard" class="screen">
+    <div class="header">
+      <span class="header-title" id="wizard-title">New Record</span>
+    </div>
+    <div class="wizard-progress" id="wizard-tabs">
+      <span class="wizard-tab active" data-screen="0">P</span>
+      <span class="wizard-tab" data-screen="1">A</span>
+      <span class="wizard-tab" data-screen="2">D</span>
+      <span class="wizard-tab" data-screen="3">S</span>
+    </div>
+    <div class="wizard-dots" id="wizard-dots">
+      <div class="wizard-dot active"></div>
+      <div class="wizard-dot"></div>
+      <div class="wizard-dot"></div>
+      <div class="wizard-dot"></div>
+    </div>
+    <div class="content" id="wizard-content"></div>
+    <div class="softkeys" id="wizard-softkeys">
+      <span class="sk-lsk" id="wiz-lsk">Cancel</span>
+      <span class="sk-csk" id="wiz-csk">Next</span>
+      <span class="sk-rsk" id="wiz-rsk">Save</span>
+    </div>
+  </div>
+
+  <!-- ── Record view ──────────────────────────────────────────────────────── -->
+  <div id="screen-view" class="screen">
+    <div class="header">
+      <span class="header-title" id="view-title">Record</span>
+    </div>
+    <div class="content" id="view-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk" id="view-lsk">Back</span>
+      <span class="sk-csk">Edit</span>
+      <span class="sk-rsk">Options</span>
+    </div>
+  </div>
+
+  <!-- ── Share screen ─────────────────────────────────────────────────────── -->
+  <div id="screen-share" class="screen">
+    <div class="header">
+      <span class="header-title">Share</span>
+    </div>
+    <div class="content" id="share-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Back</span>
+      <span class="sk-csk">Copy</span>
+      <span class="sk-rsk"></span>
+    </div>
+  </div>
+
+  <!-- ── Management screen ────────────────────────────────────────────────── -->
+  <div id="screen-management" class="screen">
+    <div class="header">
+      <span class="header-title">Manage</span>
+    </div>
+    <div class="wizard-progress" id="mgmt-tabs">
+      <span class="wizard-tab active" data-tab="records">Records</span>
+      <span class="wizard-tab" data-tab="personal">Personal</span>
+      <span class="wizard-tab" data-tab="settings">Settings</span>
+    </div>
+    <div class="content" id="mgmt-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Back</span>
+      <span class="sk-csk"></span>
+      <span class="sk-rsk" id="mgmt-rsk"></span>
+    </div>
+  </div>
+
+  <!-- ── Workpads Panel (ArrowLeft overlay) ───────────────────────────────── -->
+  <div id="panel-workpads" class="panel panel-workpads">
+    <div class="panel-header">Workpads</div>
+    <div class="panel-content" id="panel-workpads-content"></div>
+    <div class="panel-softkeys">
+      <span class="sk-lsk" style="font-size:10px;color:var(--accent);padding:0 6px;">Close</span>
+      <span class="sk-csk" style="font-size:10px;color:var(--accent);">Open</span>
+    </div>
+  </div>
+
+  <!-- ── Personal Panel (ArrowRight overlay) ──────────────────────────────── -->
+  <div id="panel-personal" class="panel panel-personal">
+    <div class="panel-header">Personal</div>
+    <div class="panel-content" id="panel-personal-content"></div>
+    <div class="panel-softkeys">
+      <span class="sk-lsk" style="font-size:10px;color:var(--accent);padding:0 6px;">Note</span>
+      <span class="sk-csk" style="font-size:10px;color:var(--accent);">Open</span>
+    </div>
+  </div>
+
+  <!-- ── Options menu overlay ─────────────────────────────────────────────── -->
+  <div id="overlay-options" style="display:none; position:absolute; top:0; left:0; width:240px; height:320px; background:rgba(0,0,0,0.88); z-index:200; flex-direction:column;">
+    <div style="height:32px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 10px; font-size:12px; font-weight:bold; color:var(--text); flex-shrink:0;">Options</div>
+    <div id="options-content" style="flex:1; overflow-y:auto;"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Cancel</span>
+      <span class="sk-csk">Select</span>
+      <span class="sk-rsk"></span>
+    </div>
+  </div>
+
+  <!-- ── Quick Note overlay ───────────────────────────────────────────────── -->
+  <div id="overlay-quicknote" style="display:none; position:absolute; top:0; left:0; width:240px; height:320px; background:rgba(0,0,0,0.85); z-index:200; flex-direction:column; justify-content:center; padding:20px;">
+    <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">Quick Note</div>
+    <textarea id="quicknote-input" style="width:100%; height:120px; background:var(--bg2); color:var(--text); border:1px solid var(--border); padding:8px; font-size:12px; font-family:inherit; resize:none;"></textarea>
+    <div style="margin-top:8px; font-size:11px; color:var(--text-muted);">CSK: Save  LSK: Cancel</div>
+  </div>
+
+  <!-- ── Scripts: lib → services → screens → app ──────────────────────────── -->
+  <script src="js/lib/fflate.js"></script>
+  <script src="js/lib/codec.js"></script>
+  <script src="js/StorageAdapter.js"></script>
+  <script src="js/ActivityService.js"></script>
+  <script src="js/RecordService.js"></script>
+  <script src="js/PersonalService.js"></script>
+  <script src="js/BlockRegistry.js"></script>
+  <script src="js/screens/list.js"></script>
+  <script src="js/screens/wizard.js"></script>
+  <script src="js/screens/view.js"></script>
+  <script src="js/screens/share.js"></script>
+  <script src="js/screens/management.js"></script>
+  <script src="js/panels/WorkpadsPanel.js"></script>
+  <script src="js/panels/PersonalPanel.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/lib/browser-dev.js"></script>
+</body>
+</html>

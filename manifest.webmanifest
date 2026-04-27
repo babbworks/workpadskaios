@@ -1,0 +1,15 @@
+{
+  "name": "Workpads",
+  "short_name": "Workpads",
+  "description": "Personal workpad records for field workers",
+  "start_url": "/index.html",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#1a1a1a",
+  "theme_color": "#1a1a1a",
+  "icons": [],
+  "b2g_features": {
+    "type": "web",
+    "permissions": {}
+  }
+}

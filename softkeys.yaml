@@ -1,0 +1,141 @@
+# Soft Key Mapping Control File — Workpads KaiOS
+# Version: v1 (2026-04-26)
+# Source of truth for LSK/CSK/RSK assignments per screen.
+# This file is read by the build process and/or workpads-dev CLI.
+# Changes here propagate to all packaged builds.
+#
+# Keys: LSK = Left Soft Key, CSK = Center Soft Key, RSK = Right Soft Key
+# Value: label shown on screen | action identifier | null if unused on that screen
+
+version: 1
+last_updated: 2026-04-26
+managed_by: workpads-dev CLI (planned, not yet implemented)
+
+screens:
+  record-list:
+    lsk: null
+    csk:
+      label: Open
+      action: record.open
+    rsk:
+      label: New
+      action: record.new
+
+  create-screen-1-process:
+    lsk:
+      label: Cancel
+      action: record.cancel
+    csk:
+      label: Next
+      action: nav.next-screen
+    rsk:
+      label: Save
+      action: record.save
+
+  create-screen-2-actions:
+    lsk:
+      label: Back
+      action: nav.prev-screen
+    csk:
+      label: Next
+      action: nav.next-screen
+    rsk:
+      label: Save
+      action: record.save
+
+  create-screen-3-details-story:
+    lsk:
+      label: Back
+      action: nav.prev-screen
+    csk: null
+    rsk:
+      label: Save
+      action: record.save
+
+  view-record:
+    lsk:
+      label: Back
+      action: nav.back
+    csk:
+      label: Edit
+      action: record.edit
+    rsk:
+      label: Share
+      action: record.share
+
+  share-screen:
+    lsk:
+      label: Back
+      action: nav.back
+    csk:
+      label: Copy
+      action: share.copy-link
+    rsk: null
+
+  personal-panel:
+    lsk:
+      label: New Note
+      action: personal.quick-note
+    csk:
+      label: Open
+      action: personal.open-capture
+    rsk:
+      label: Options
+      action: personal.item-options
+    # Note: when panel header row focused, CSK = navigate to Personal Home
+    # LSK always creates a quick-note linked to current wizard context (if in wizard)
+
+  personal-home-notes:
+    lsk:
+      label: Export
+      action: personal.export
+    csk:
+      label: Open
+      action: personal.open-capture
+    rsk:
+      label: Options
+      action: personal.capture-options
+
+  personal-home-work:
+    lsk:
+      label: Filter
+      action: personal.work-filter
+    csk:
+      label: Open
+      action: record.open
+    rsk:
+      label: Options
+      action: record.options
+
+  workpads-panel:
+    lsk:
+      label: Close
+      action: nav.close-panel
+    csk:
+      label: Open
+      action: record.open
+    rsk: null
+
+  block-suggestion-overlay:
+    lsk:
+      label: Back
+      action: nav.dismiss-overlay
+    csk:
+      label: Select
+      action: block.select-entry
+    rsk: null
+
+  activity-picker:
+    lsk:
+      label: Cancel
+      action: nav.dismiss-overlay
+    csk:
+      label: Select
+      action: activity.select
+    rsk: null
+
+# Notes:
+# - This is v1 — approved 2026-04-26 (quiz-round-1-responses.md Q6)
+# - workpads-dev CLI (planned) will read this file to configure builds
+# - Soft key labels are 8 chars max to fit KaiOS 240x320 display
+# - action identifiers are kebab-case internal command references
