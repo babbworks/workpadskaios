@@ -2,78 +2,149 @@
 // Loaded ONLY in development. Do not include in production KaiOS build.
 //
 // Key mappings for browser testing:
-//   F1          → SoftLeft  (LSK)
-//   F2  / Enter → SoftRight (RSK) — note: Enter is CSK on device, handled natively
-//   F3          → SoftRight (RSK)
+//   a           → SoftLeft  (LSK)  — only outside input fields
+//   s           → CSK/Enter        — only outside input fields
+//   d           → SoftRight (RSK)  — only outside input fields
 //   Backspace   → Back (same as device)
 //   Arrow keys  → native (same as device)
-//
-// For KaiOS Simulator (Firefox-based):
-//   F1 = LSK, F2 = CSK, F6 = RSK — adjust KEYMAP below if needed.
+//   Numpad 0-9  → '0'-'9' (explicit, works regardless of NumLock state)
+//   Numpad *    → '*'
+//   NumpadEnter → Enter
 
 (function() {
   'use strict';
 
-  var KEYMAP = {
-    'F1': 'SoftLeft',
-    'F3': 'SoftRight',
+  var SOFTKEY_MAP = {
+    'a': 'SoftLeft',
+    'd': 'SoftRight',
   };
 
-  // Remap function keys to KaiOS soft key names
+  var NUMPAD_CODE_MAP = {
+    'Numpad0': '0', 'Numpad1': '1', 'Numpad2': '2', 'Numpad3': '3',
+    'Numpad4': '4', 'Numpad5': '5', 'Numpad6': '6', 'Numpad7': '7',
+    'Numpad8': '8', 'Numpad9': '9', 'NumpadMultiply': '*',
+  };
+
+  function isInInput() {
+    var el = document.activeElement;
+    return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT');
+  }
+
+  function fire(key) {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: key, bubbles: true, cancelable: true }));
+  }
+
+  function fireCSK() {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    setTimeout(function() {
+      document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true, cancelable: true }));
+    }, 50);
+  }
+
   document.addEventListener('keydown', function(e) {
-    if (KEYMAP[e.key]) {
-      var fakeEvent = new KeyboardEvent('keydown', {
-        key:       KEYMAP[e.key],
-        bubbles:   true,
-        cancelable: true,
-      });
+    // a / d → SoftLeft / SoftRight (outside inputs only)
+    if (SOFTKEY_MAP[e.key] && !isInInput()) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      document.dispatchEvent(fakeEvent);
+      fire(SOFTKEY_MAP[e.key]);
+      return;
     }
-  }, true); // capture phase — fires before app.js handlers
 
-  // Make softkey bar labels clickable
+    // s → CSK Enter (outside inputs only)
+    if (e.key === 's' && !isInInput()) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      fireCSK();
+      return;
+    }
+
+    // Numpad digits and * — remap by code so NumLock state doesn't matter
+    if (NUMPAD_CODE_MAP[e.code]) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      fire(NUMPAD_CODE_MAP[e.code]);
+      updateShortcutBar();
+      return;
+    }
+
+    // NumpadEnter → Enter
+    if (e.code === 'NumpadEnter') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      fireCSK();
+      return;
+    }
+
+    // Update shortcut bar on any non-input key
+    setTimeout(updateShortcutBar, 50);
+  }, true); // capture phase
+
+  // ── Softkey bar click bindings ───────────────────────────────────────────
+  // Skip softkeys inside .panel — panels install their own click handlers.
+
   function bindSoftkeyClicks() {
     document.querySelectorAll('.sk-lsk').forEach(function(el) {
+      if (el.closest('.panel')) return;
       el.style.cursor = 'pointer';
-      el.addEventListener('click', function() {
-        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'SoftLeft', bubbles: true }));
-      });
+      el.addEventListener('click', function() { fire('SoftLeft'); });
     });
     document.querySelectorAll('.sk-rsk').forEach(function(el) {
+      if (el.closest('.panel')) return;
       el.style.cursor = 'pointer';
-      el.addEventListener('click', function() {
-        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'SoftRight', bubbles: true }));
-      });
+      el.addEventListener('click', function() { fire('SoftRight'); });
     });
     document.querySelectorAll('.sk-csk').forEach(function(el) {
+      if (el.closest('.panel')) return;
       el.style.cursor = 'pointer';
-      el.addEventListener('click', function() {
-        // Simulate short CSK press (keydown + keyup)
-        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-        setTimeout(function() {
-          document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
-        }, 50);
-      });
+      el.addEventListener('click', function() { fireCSK(); });
     });
   }
 
-  // Dev overlay — shows current screen name and key hints
+  // ── Dev overlay ──────────────────────────────────────────────────────────
+
+  var devBar  = null;
+  var shortBar = null;
+
   function createDevOverlay() {
-    var bar = document.createElement('div');
-    bar.id = 'dev-bar';
-    bar.style.cssText = [
+    devBar = document.createElement('div');
+    devBar.id = 'dev-bar';
+    devBar.style.cssText = [
       'position:fixed', 'bottom:40px', 'left:0', 'width:240px',
-      'background:rgba(0,0,0,0.7)', 'color:#4a9eff', 'font-size:9px',
+      'background:rgba(0,0,0,0.75)', 'color:#4a9eff', 'font-size:9px',
       'padding:2px 6px', 'z-index:999', 'pointer-events:none',
-      'font-family:monospace',
+      'font-family:monospace', 'line-height:1.5',
     ].join(';');
-    bar.textContent = 'DEV  F1=LSK  Enter=CSK  F3=RSK  Arrows=nav';
-    document.body.appendChild(bar);
+    devBar.textContent = 'DEV  a=LSK  s=CSK  d=RSK  Arrows=nav  Numpad=0-9/*';
+    document.body.appendChild(devBar);
+
+    shortBar = document.createElement('div');
+    shortBar.id = 'dev-shortbar';
+    shortBar.style.cssText = [
+      'position:fixed', 'bottom:58px', 'left:0', 'width:240px',
+      'background:rgba(0,0,0,0.65)', 'color:#aaa', 'font-size:9px',
+      'padding:2px 6px', 'z-index:999', 'pointer-events:none',
+      'font-family:monospace', 'line-height:1.5',
+    ].join(';');
+    document.body.appendChild(shortBar);
+
+    updateShortcutBar();
   }
 
-  // Run after DOM is ready
+  function updateShortcutBar() {
+    if (!shortBar || typeof App === 'undefined') return;
+    var screen = App.getCurrentScreen ? App.getCurrentScreen() : '';
+    var maps   = App.SHORTCUT_MAPS || {};
+    var list   = maps[screen] || [];
+    if (!list.length) {
+      shortBar.textContent = screen ? '[' + screen + '] *=keys' : '*=keys';
+      return;
+    }
+    var parts = list.map(function(s) { return s.key + '=' + s.label; });
+    shortBar.textContent = '[' + screen + '] ' + parts.join('  ');
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
       bindSoftkeyClicks();
@@ -84,5 +155,5 @@
     createDevOverlay();
   }
 
-  console.log('[workpads dev] browser shim active — F1=LSK, Enter=CSK, F3=RSK');
+  console.log('[workpads dev] browser shim active — a=LSK, s=CSK, d=RSK, Numpad=0-9/*');
 }());

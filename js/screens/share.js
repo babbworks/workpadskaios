@@ -11,10 +11,6 @@
   var currentRecord = null;
   var currentUrl    = null;
 
-  function esc(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
   function copyToClipboard(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       return navigator.clipboard.writeText(text);
@@ -70,7 +66,7 @@
       '</div>' +
       '<div class="view-field">' +
         '<div class="view-field-label">Powered by</div>' +
-        '<div class="view-field-value" style="color:var(--text-muted);">Workpads v0.1.0 · bitpad-v1 codec</div>' +
+        '<div class="view-field-value" style="color:var(--text-muted);">Workpads v0.2.0 · bitpad-c (1eg/) codec</div>' +
       '</div>';
 
     WorkpadsPanel.setContext({ screen: 'share', record: rec, url: currentUrl });
@@ -96,7 +92,6 @@
 
   function onKey(key) {
     switch (key) {
-      case 'SoftLeft':
       case 'Backspace':
         App.showView(currentRecord);
         break;
@@ -106,6 +101,10 @@
     }
   }
 
-  global.ShareScreen = { onShow: onShow, onKey: onKey };
+  global.ShareScreen = {
+    onShow: onShow,
+    onKey: onKey,
+    getCurrentRecord: function() { return currentRecord; },
+  };
 
 }(window));

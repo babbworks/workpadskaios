@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>WorkpadsPanel · Browse Mode Prototype</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0d0d0d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: sans-serif;
+  gap: 32px;
+}
+
+:root {
+  --bg:         #1a1a1a;
+  --bg2:        #252525;
+  --bg3:        #303030;
+  --border:     #3a3a3a;
+  --text:       #e8e8e8;
+  --text-muted: #888;
+  --accent:     #4a9eff;
+  --warn:       #f0a030;
+  --danger:     #e05050;
+  --green:      #50c878;
+}
+
+/* ── Device shell ── */
+.device {
+  width: 240px; height: 320px;
+  position: relative;
+  border: 2px solid #2a2a2a;
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.device-bg {
+  position: absolute; top: 0; left: 0;
+  width: 240px; height: 320px;
+  background: var(--bg);
+}
+
+/* ── Panel shell ── */
+.panel {
+  position: absolute; top: 0; left: 0;
+  width: 192px; height: 320px;
+  background: var(--bg2);
+  border-right: 2px solid var(--accent);
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  color: var(--text);
+  z-index: 10;
+}
+
+/* ── Header ── */
+.ph {
+  height: 32px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+
+.ph-logo {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--text);
+  flex: 1;
+}
+
+.ph-icons { display: flex; gap: 4px; align-items: center; }
+
+.ph-icon {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: bold;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ph-icon.ico-dollar { color: var(--green); border-color: #306040; }
+/* A button — accent color, navigates to Activities screen */
+.ph-icon.ico-act { color: var(--accent); border-color: #204060; }
+
+/* ── Fixed controls ── */
+.pc {
+  flex-shrink: 0;
+  padding: 5px 6px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Greeting + user switch */
+.greeting-row {
+  display: flex; align-items: center;
+  margin-bottom: 5px;
+}
+
+.greeting {
+  font-size: 12px; font-weight: bold;
+  color: var(--text); flex: 1;
+}
+
+.switch-icon {
+  width: 18px; height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--bg3);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.switch-icon:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Quick-create */
+.qc { display: flex; gap: 3px; margin-bottom: 5px; }
+
+.qc-btn {
+  flex: 1; text-align: center;
+  font-size: 9px; font-weight: bold;
+  padding: 3px 1px; border-radius: 2px; cursor: pointer;
+}
+
+.qc-exp  { background: #4a1818; border: 1px solid #7a2828; color: #ffaaaa; }
+.qc-cogs { background: #2e2a0a; border: 1px solid #5a5218; color: #e8d060; }
+.qc-inc  { background: #0e3a1e; border: 1px solid #246034; color: #70e090; }
+
+/* Scope tabs */
+.scope { display: flex; gap: 2px; margin-bottom: 5px; }
+
+.sc-tab {
+  flex: 1; text-align: center;
+  font-size: 9px; font-weight: bold;
+  padding: 3px 0;
+  border: 1px solid var(--border); border-radius: 2px;
+  color: var(--text-muted); cursor: pointer;
+}
+
+.sc-tab.active { background: #182840; border-color: var(--accent); color: var(--accent); }
+
+/* Activity chips row — collapsible */
+.chips-row {
+  display: flex; align-items: center; gap: 3px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  max-height: 22px;
+  transition: max-height 0.15s ease, margin-bottom 0.15s ease, opacity 0.15s ease;
+  opacity: 1;
+}
+
+.chips-row.collapsed {
+  max-height: 0; margin-bottom: 0; opacity: 0; pointer-events: none;
+}
+
+.chip {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight: bold;
+  color: var(--text-muted); cursor: pointer;
+  transition: border-color 0.1s, color 0.1s, box-shadow 0.1s;
+}
+
+.chip.on {
+  background: #182840;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* D-pad focus on a chip */
+.chip.dpfocus {
+  box-shadow: 0 0 0 2px var(--accent);
+  border-color: var(--accent);
+}
+
+.chip-x {
+  font-size: 10px; color: var(--danger);
+  padding: 0 1px; cursor: pointer; margin-left: 1px; line-height: 1;
+}
+
+/* Date range row */
+.daterow { display: flex; align-items: center; gap: 3px; }
+
+.dr-date {
+  flex: 1; font-size: 9px;
+  border: 1px solid var(--border); border-radius: 2px;
+  padding: 2px 4px; background: var(--bg);
+  cursor: pointer; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: border-color 0.1s;
+}
+
+.dr-date.empty  { color: var(--text-muted); }
+.dr-date.filled { color: var(--text); }
+.dr-date.dpfocus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+.dr-sep {
+  font-size: 10px; color: var(--danger);
+  cursor: pointer; flex-shrink: 0; padding: 0 1px; line-height: 1;
+}
+
+/* D-pad focus on the date ✕ */
+.dr-sep.dpfocus {
+  color: #fff;
+  text-shadow: 0 0 4px var(--danger);
+}
+
+/* ── Summary list ── */
+.ps {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 2px 0;
+}
+
+.ps::-webkit-scrollbar { width: 2px; }
+.ps::-webkit-scrollbar-thumb { background: var(--border); border-radius: 1px; }
+
+.sg-sep { height: 1px; background: var(--border); margin: 3px 8px; }
+
+/* Display-only parent lines (Total Charges, Total Expenses) */
+.sl-parent {
+  display: flex; align-items: center;
+  padding: 3px 6px;
+}
+
+.sl-parent .sl-lbl {
+  font-size: 10px; color: var(--text-muted);
+  flex: 1; font-style: italic;
+}
+
+.sl-parent .sl-val {
+  font-size: 10px; color: var(--text-muted);
+  white-space: nowrap; flex-shrink: 0;
+}
+
+/* Standard summary line */
+.sl {
+  display: flex; align-items: center;
+  padding: 2px 6px; position: relative;
+}
+
+.sl.nav { cursor: pointer; }
+.sl.nav:hover { background: var(--bg3); }
+
+.sl.dpfocus {
+  background: #162030;
+  border-left: 2px solid var(--accent);
+  padding-left: 4px;
+}
+
+.sl-lbl {
+  flex: 1; font-size: 10px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding-right: 4px;
+}
+
+.sl-lbl.neg  { color: var(--danger); }
+.sl-lbl.mute { color: var(--text-muted); }
+
+.sl-val {
+  font-size: 10px; color: var(--text-muted);
+  white-space: nowrap; flex-shrink: 0;
+}
+
+.sl-val.pos  { color: var(--green); }
+.sl-val.neg  { color: var(--danger); }
+.sl-val.warn { color: var(--warn); }
+
+.sl-arr {
+  font-size: 9px; color: var(--accent);
+  margin-left: 2px; flex-shrink: 0; opacity: 0;
+}
+
+.sl.nav .sl-arr    { opacity: 0.4; }
+.sl.dpfocus .sl-arr { opacity: 1; }
+
+/* ── Mode strip ── */
+.mode-strip {
+  height: 13px; background: var(--bg);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.mode-text { font-size: 8px; color: var(--text-muted); }
+.mode-text em { color: var(--accent); font-style: normal; }
+
+/* ── Softkeys ── */
+.psk {
+  height: 28px; background: var(--bg3);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 6px; flex-shrink: 0;
+}
+
+.psk-l { flex: 1; font-size: 10px; color: var(--accent); }
+.psk-c { font-size: 10px; color: var(--accent); font-weight: bold; padding: 0 3px; }
+.psk-r { flex: 1; font-size: 10px; color: var(--accent); text-align: right; }
+
+/* ── Secondary overlay (Activity picker + Activity/chip detail) ── */
+.overlay {
+  position: absolute; top: 0; left: 0;
+  width: 192px; height: 320px;
+  background: var(--bg2);
+  border-right: 2px solid var(--accent);
+  display: flex; flex-direction: column;
+  z-index: 20;
+  transform: translateX(-100%);
+  transition: transform 0.18s ease;
+}
+
+.overlay.open { transform: translateX(0); }
+
+.ov-header {
+  height: 32px; background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 8px; gap: 6px; flex-shrink: 0;
+}
+
+.ov-back { font-size: 11px; color: var(--accent); cursor: pointer; }
+.ov-title { font-size: 12px; font-weight: bold; color: var(--text); flex: 1; }
+
+.ov-body { flex: 1; overflow-y: auto; padding: 4px 0; }
+
+.ov-item {
+  display: flex; align-items: center;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer; gap: 8px;
+}
+
+.ov-item:hover { background: var(--bg3); }
+.ov-item.selected { background: #182840; }
+
+.ov-letter {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border); background: var(--bg3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: bold; color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.ov-item.selected .ov-letter { background: #182840; border-color: var(--accent); color: var(--accent); }
+
+.ov-name { font-size: 11px; color: var(--text); flex: 1; }
+.ov-check { font-size: 11px; color: var(--accent); opacity: 0; }
+.ov-item.selected .ov-check { opacity: 1; }
+
+/* Activity detail view (stub) */
+.ov-detail-block {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ov-detail-label { font-size: 9px; color: var(--text-muted); margin-bottom: 2px; }
+.ov-detail-value { font-size: 11px; color: var(--text); }
+.ov-detail-value.pos { color: var(--green); }
+.ov-detail-value.neg { color: var(--danger); }
+.ov-detail-note { font-size: 9px; color: var(--text-muted); margin-top: 6px; font-style: italic; }
+
+.ov-softkeys {
+  height: 28px; background: var(--bg3);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 8px; flex-shrink: 0;
+}
+
+.ov-sk-l { flex: 1; font-size: 10px; color: var(--accent); }
+.ov-sk-r { flex: 1; font-size: 10px; color: var(--accent); text-align: right; }
+
+/* ── Key hints sidebar ── */
+.hints {
+  color: #555; font-size: 11px; line-height: 1.9; width: 170px; flex-shrink: 0;
+}
+
+.hints h3 { color: #666; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 8px; }
+.hints kbd {
+  display: inline-block; background: #1a1a1a;
+  border: 1px solid #2a2a2a; border-radius: 2px;
+  padding: 1px 4px; font-family: monospace; font-size: 10px; color: #777; margin-right: 3px;
+}
+.hints .sect { color: #444; font-size: 10px; margin-top: 8px; margin-bottom: 3px; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed; bottom: 24px; left: 50%;
+  transform: translateX(-50%);
+  background: #162030; border: 1px solid var(--accent);
+  color: var(--accent); font-size: 10px;
+  padding: 5px 12px; border-radius: 3px;
+  opacity: 0; transition: opacity 0.2s;
+  pointer-events: none; white-space: nowrap;
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="hints">
+  <h3>Keyboard</h3>
+  <div><kbd>↑</kbd><kbd>↓</kbd> unified nav</div>
+  <div><kbd>Enter</kbd> activate focused</div>
+  <div><kbd>*</kbd> toggle scroll mode</div>
+  <div><kbd>←</kbd><kbd>→</kbd> scope tabs</div>
+  <div class="sect">Quick-create (global)</div>
+  <div><kbd>1</kbd> New Expense</div>
+  <div><kbd>2</kbd> New COGS</div>
+  <div><kbd>3</kbd> New Income</div>
+  <div class="sect">Overlays</div>
+  <div><kbd>A</kbd> Activities screen</div>
+  <div><kbd>Bksp</kbd> Back / close</div>
+</div>
+
+<div class="device">
+  <div class="device-bg"></div>
+
+  <!-- Main panel -->
+  <div class="panel" id="panel">
+
+    <div class="ph">
+      <div class="ph-logo">W</div>
+      <div class="ph-icons">
+        <div class="ph-icon ico-dollar" title="Financial Overview">$</div>
+        <div class="ph-icon ico-act" id="actBtn" title="Activities screen">A</div>
+        <div class="ph-icon" title="Settings">⚙</div>
+      </div>
+    </div>
+
+    <div class="pc" id="controls">
+
+      <div class="greeting-row">
+        <div class="greeting">Hello, Michael.</div>
+        <div class="switch-icon" title="Switch user">⇄</div>
+      </div>
+
+      <div class="qc">
+        <div class="qc-btn qc-exp">1 EXP.</div>
+        <div class="qc-btn qc-cogs">2 COGS</div>
+        <div class="qc-btn qc-inc">3 INC.</div>
+      </div>
+
+      <div class="scope" id="scopeTabs">
+        <div class="sc-tab active" data-scope="activity">ACTIVITY</div>
+        <div class="sc-tab"       data-scope="projects">PROJECTS</div>
+        <div class="sc-tab"       data-scope="tags">Tags</div>
+      </div>
+
+      <!-- Chips row — collapses when cleared -->
+      <div class="chips-row" id="chipsRow">
+        <!-- chips injected by JS -->
+        <div class="chip-x" id="chipsClose" title="Clear activity filter">✕</div>
+      </div>
+
+      <!-- Date range: [start] [red ✕] [end] -->
+      <div class="daterow">
+        <div class="dr-date empty" id="dateStart">— start</div>
+        <div class="dr-sep"        id="dateClear">✕</div>
+        <div class="dr-date filled" id="dateEnd">May 5th, 2026</div>
+      </div>
+
+    </div>
+
+    <!-- Scrollable summary -->
+    <div class="ps" id="summary">
+
+      <div class="sl nav" data-filter="billed"        data-label="Invoiced / Charged For records">
+        <span class="sl-lbl">Billed</span>
+        <span class="sl-val pos">£ 4,820</span>
+        <span class="sl-arr">›</span>
+      </div>
+      <div class="sl nav" data-filter="collected"     data-label="Payment records">
+        <span class="sl-lbl">Collected</span>
+        <span class="sl-val pos">£ 3,200</span>
+        <span class="sl-arr">›</span>
+      </div>
+      <div class="sl nav" data-filter="receivables"   data-label="Records with balances owing">
+        <span class="sl-lbl">Receivables</span>
+        <span class="sl-val warn">£ 1,620</span>
+        <span class="sl-arr">›</span>
+      </div>
+      <div class="sl nav" data-filter="payables"      data-label="Unpaid expense records + uncleared loans">
+        <span class="sl-lbl neg">Payables</span>
+        <span class="sl-val neg">£ 840</span>
+        <span class="sl-arr">›</span>
+      </div>
+      <div class="sl nav" data-filter="loans"         data-label="Uncleared loan records">
+        <span class="sl-lbl neg">Loans</span>
+        <span class="sl-val neg">£ 500</span>
+        <span class="sl-arr">›</span>
+      </div>
+      <div class="sl">
+        <span class="sl-lbl mute">R − P − L</span>
+        <span class="sl-val warn">£ 280</span>
+      </div>
+      <div class="sl">
+        <span class="sl-lbl mute">R − P</span>
+        <span class="sl-val warn">£ 780</span>
+      </div>
+
+      <div class="sg-sep"></div>
+
+      <div class="sl-parent">
+        <span class="sl-lbl">Total Charges</span>
+        <span class="sl-val">£ 4,820</span>
+      </div>
+      <div class="sl nav" data-filter="job-charges"   data-label="Individual billed work-charge line items">
+        <span class="sl-lbl">Job Charges</span>
+        <span class="sl-val">£ 4,017</span>
+        <span class="sl-arr">›</span>
+      </div>
+      <div class="sl nav" data-filter="total-taxes"   data-label="Per-job tax card records">
+        <span class="sl-lbl">Total Taxes</span>
+        <span class="sl-val">£ 803</span>
+        <span class="sl-arr">›</span>
+      </div>
+
+      <div class="sg-sep"></div>
+
+      <div class="sl-parent">
+        <span class="sl-lbl">Total Expenses</span>
+        <span class="sl-val" style="color:var(--danger);">£ 2,540</span>
+      </div>
+      <div class="sl nav" data-filter="billable-expenses" data-label="Job cost items outside labour/services">
+        <span class="sl-lbl neg">Billable Expenses</span>
+        <span class="sl-val neg">£ 1,240</span>
+        <span class="sl-arr">›</span>
+      </div>
+      <div class="sl nav" data-filter="real-job-costs"    data-label="Literal cost records — COGS incl. labour">
+        <span class="sl-lbl neg">Real Job Costs</span>
+        <span class="sl-val neg">£ 980</span>
+        <span class="sl-arr">›</span>
+      </div>
+      <div class="sl nav" data-filter="operating-costs"   data-label="Activity-level running costs (not job-tied)">
+        <span class="sl-lbl neg">Operating Costs</span>
+        <span class="sl-val neg">£ 320</span>
+        <span class="sl-arr">›</span>
+      </div>
+
+      <div class="sg-sep"></div>
+
+      <div class="sl"><span class="sl-lbl mute">Job Cost Margin</span><span class="sl-val pos">74.4%</span></div>
+      <div class="sl"><span class="sl-lbl mute">Total Job Margin</span><span class="sl-val pos">68.2%</span></div>
+
+      <div class="sg-sep"></div>
+
+      <div class="sl"><span class="sl-lbl neg mute">Est. Job Costs</span><span class="sl-val neg">£ 900</span></div>
+      <div class="sl"><span class="sl-lbl neg mute">Act. Job Costs</span><span class="sl-val neg">£ 980</span></div>
+      <div class="sl"><span class="sl-lbl mute">Jobs Cost Split</span><span class="sl-val warn">+£ 80</span></div>
+
+      <div class="sg-sep"></div>
+
+      <div class="sl"><span class="sl-lbl neg mute">Est. Operating</span><span class="sl-val neg">£ 300</span></div>
+      <div class="sl"><span class="sl-lbl neg mute">Act. Operating</span><span class="sl-val neg">£ 320</span></div>
+      <div class="sl"><span class="sl-lbl mute">Cost Split</span><span class="sl-val warn">+£ 20</span></div>
+
+      <div class="sg-sep"></div>
+
+      <div class="sl"><span class="sl-lbl mute">Operating Margin</span><span class="sl-val pos">63.1%</span></div>
+      <div class="sl"><span class="sl-lbl mute">Gross Margin</span><span class="sl-val pos">56.4%</span></div>
+      <div class="sl"><span class="sl-lbl mute">Net Margin</span><span class="sl-val pos">52.8%</span></div>
+
+      <div class="sg-sep"></div>
+
+      <div class="sl"><span class="sl-lbl mute">Expense Ratio</span><span class="sl-val">28.4%</span></div>
+      <div class="sl"><span class="sl-lbl mute">Avg. Rev / Job</span><span class="sl-val">£ 964</span></div>
+      <div class="sl"><span class="sl-lbl mute">Present / Future</span><span class="sl-val">£3.2k / £1.6k</span></div>
+
+    </div>
+
+    <div class="mode-strip">
+      <div class="mode-text" id="modeText"></div>
+    </div>
+
+    <div class="psk">
+      <div class="psk-l">← Close</div>
+      <div class="psk-c" id="cskLabel">·</div>
+      <div class="psk-r">Notes →</div>
+    </div>
+
+  </div><!-- /panel -->
+
+  <!-- Activity picker overlay -->
+  <div class="overlay" id="actOverlay">
+    <div class="ov-header">
+      <div class="ov-back" id="actBack">←</div>
+      <div class="ov-title">Activities</div>
+    </div>
+    <div class="ov-body" id="actList"></div>
+    <div class="ov-softkeys">
+      <div class="ov-sk-l" id="actOvLsk">← Back</div>
+      <div class="ov-sk-r">Apply →</div>
+    </div>
+  </div>
+
+  <!-- Activity/chip detail overlay -->
+  <div class="overlay" id="chipOverlay">
+    <div class="ov-header">
+      <div class="ov-back" id="chipBack">←</div>
+      <div class="ov-title" id="chipTitle">Activity</div>
+    </div>
+    <div class="ov-body" id="chipBody"></div>
+    <div class="ov-softkeys">
+      <div class="ov-sk-l" id="chipOvLsk">← Back</div>
+      <div class="ov-sk-r">Records →</div>
+    </div>
+  </div>
+
+</div><!-- /device -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  var CHUNK = 48;
+  var navMode = 'line';
+
+  var ACTIVITIES = [
+    { letter: 'A', name: 'Alpha Contractors',  revenue: '£ 1,840', jobs: 4  },
+    { letter: 'B', name: 'Bright Street Reno', revenue: '£ 620',   jobs: 1  },
+    { letter: 'D', name: 'Delco Services',     revenue: '£ 980',   jobs: 3  },
+    { letter: 'F', name: 'Franklin Project',   revenue: '£ 740',   jobs: 2  },
+    { letter: 'K', name: 'Kingston Builds',    revenue: '£ 1,260', jobs: 5  },
+    { letter: 'M', name: 'Marchfield Ltd',     revenue: '£ 520',   jobs: 2  },
+  ];
+
+  var selectedActivities = ['A', 'D', 'F', 'K'];
+  var chipsVisible = true;
+
+  // DOM
+  var summaryEl   = document.getElementById('summary');
+  var modeEl      = document.getElementById('modeText');
+  var cskEl       = document.getElementById('cskLabel');
+  var toastEl     = document.getElementById('toast');
+  var chipsRow    = document.getElementById('chipsRow');
+  var chipsClose  = document.getElementById('chipsClose');
+  var actBtn      = document.getElementById('actBtn');
+  var actOverlay  = document.getElementById('actOverlay');
+  var actList     = document.getElementById('actList');
+  var actBack     = document.getElementById('actBack');
+  var actOvLsk    = document.getElementById('actOvLsk');
+  var chipOverlay = document.getElementById('chipOverlay');
+  var chipTitle   = document.getElementById('chipTitle');
+  var chipBody    = document.getElementById('chipBody');
+  var chipBack    = document.getElementById('chipBack');
+  var chipOvLsk   = document.getElementById('chipOvLsk');
+  var scopeTabEls = [].slice.call(document.querySelectorAll('.sc-tab'));
+  var scopeIdx    = 0;
+
+  var toastTimer  = null;
+  var activeOverlay = null; // 'act' | 'chip' | null
+
+  // ── Flat focusable list ────────────────────────────────────────────────────
+  // Types: { type: 'chip', el, letter }
+  //        { type: 'date-x', el }
+  //        { type: 'summary', el }
+
+  var focusables = [];
+  var focusIdx   = 0;
+
+  function buildFocusables() {
+    focusables = [];
+
+    // 1. Chips (only when row is visible)
+    if (chipsVisible && selectedActivities.length > 0) {
+      var chipEls = [].slice.call(chipsRow.querySelectorAll('.chip'));
+      chipEls.forEach(function(c) {
+        focusables.push({ type: 'chip', el: c, letter: c.getAttribute('data-letter') });
+      });
+    }
+
+    // 2. Date ✕
+    focusables.push({ type: 'date-x', el: document.getElementById('dateClear') });
+
+    // 3. Summary navigable lines
+    var navEls = [].slice.call(document.querySelectorAll('.sl.nav'));
+    navEls.forEach(function(el) {
+      focusables.push({ type: 'summary', el: el });
+    });
+  }
+
+  function clearAllFocus() {
+    focusables.forEach(function(f) {
+      f.el.classList.remove('dpfocus');
+    });
+  }
+
+  function applyFocus() {
+    clearAllFocus();
+    var f = focusables[focusIdx];
+    if (!f) return;
+    f.el.classList.add('dpfocus');
+
+    // Scroll summary lines into view
+    if (f.type === 'summary') {
+      var pr = summaryEl.getBoundingClientRect();
+      var lr = f.el.getBoundingClientRect();
+      if (lr.bottom > pr.bottom) summaryEl.scrollTop += lr.bottom - pr.bottom + 2;
+      else if (lr.top < pr.top)  summaryEl.scrollTop -= pr.top - lr.top + 2;
+    }
+
+    // Update CSK label
+    if (f.type === 'chip')    cskEl.textContent = 'View';
+    else if (f.type === 'date-x') cskEl.textContent = 'Clear';
+    else cskEl.textContent = '›';
+  }
+
+  function activate() {
+    var f = focusables[focusIdx];
+    if (!f) return;
+
+    if (f.type === 'chip') {
+      openChipOverlay(f.letter);
+    } else if (f.type === 'date-x') {
+      var ds = document.getElementById('dateStart');
+      ds.textContent = '— start';
+      ds.className = 'dr-date empty';
+      showToast('Date range cleared');
+    } else if (f.type === 'summary') {
+      var lbl = f.el.getAttribute('data-label') || f.el.getAttribute('data-filter');
+      showToast('→ ' + lbl);
+    }
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { toastEl.classList.remove('show'); }, 2000);
+  }
+
+  // ── Chips ──────────────────────────────────────────────────────────────────
+
+  function renderChips() {
+    var existing = chipsRow.querySelectorAll('.chip');
+    for (var i = 0; i < existing.length; i++) chipsRow.removeChild(existing[i]);
+
+    selectedActivities.forEach(function(letter) {
+      var act = null;
+      for (var i = 0; i < ACTIVITIES.length; i++) {
+        if (ACTIVITIES[i].letter === letter) { act = ACTIVITIES[i]; break; }
+      }
+      var c = document.createElement('div');
+      c.className = 'chip on';
+      c.textContent = letter;
+      c.setAttribute('data-letter', letter);
+      c.title = act ? act.name : letter;
+      chipsRow.insertBefore(c, chipsClose);
+    });
+
+    var hasFilter = chipsVisible && selectedActivities.length > 0;
+    chipsRow.classList.toggle('collapsed', !hasFilter);
+
+    buildFocusables();
+
+    // Keep focusIdx in bounds
+    if (focusIdx >= focusables.length) focusIdx = Math.max(0, focusables.length - 1);
+    applyFocus();
+  }
+
+  chipsClose.addEventListener('click', function() {
+    chipsVisible = false;
+    selectedActivities = [];
+    renderChips();
+    showToast('Showing all Activities');
+  });
+
+  // ── Activity picker overlay ────────────────────────────────────────────────
+
+  function buildActList() {
+    actList.innerHTML = '';
+    ACTIVITIES.forEach(function(act) {
+      var item = document.createElement('div');
+      item.className = 'ov-item' + (selectedActivities.indexOf(act.letter) !== -1 ? ' selected' : '');
+      item.innerHTML =
+        '<div class="ov-letter">' + act.letter + '</div>' +
+        '<div class="ov-name">' + act.name + '</div>' +
+        '<div class="ov-check">✓</div>';
+      item.addEventListener('click', function() {
+        var idx = selectedActivities.indexOf(act.letter);
+        if (idx === -1) selectedActivities.push(act.letter);
+        else selectedActivities.splice(idx, 1);
+        item.classList.toggle('selected', selectedActivities.indexOf(act.letter) !== -1);
+      });
+      actList.appendChild(item);
+    });
+  }
+
+  function openActOverlay() {
+    buildActList();
+    activeOverlay = 'act';
+    actOverlay.classList.add('open');
+  }
+
+  function closeActOverlay() {
+    activeOverlay = null;
+    actOverlay.classList.remove('open');
+    chipsVisible = selectedActivities.length > 0;
+    renderChips();
+    if (selectedActivities.length > 0) showToast(selectedActivities.length + ' activities selected');
+    else showToast('Showing all Activities');
+  }
+
+  actBtn.addEventListener('click', openActOverlay);
+  actBack.addEventListener('click', closeActOverlay);
+  actOvLsk.addEventListener('click', closeActOverlay);
+
+  // ── Chip detail overlay ────────────────────────────────────────────────────
+
+  function openChipOverlay(letter) {
+    var act = null;
+    for (var i = 0; i < ACTIVITIES.length; i++) {
+      if (ACTIVITIES[i].letter === letter) { act = ACTIVITIES[i]; break; }
+    }
+    if (!act) return;
+
+    chipTitle.textContent = act.name;
+    chipBody.innerHTML =
+      '<div class="ov-detail-block">' +
+        '<div class="ov-detail-label">Revenue</div>' +
+        '<div class="ov-detail-value pos">' + act.revenue + '</div>' +
+      '</div>' +
+      '<div class="ov-detail-block">' +
+        '<div class="ov-detail-label">Active Jobs</div>' +
+        '<div class="ov-detail-value">' + act.jobs + ' records</div>' +
+      '</div>' +
+      '<div class="ov-detail-block">' +
+        '<div class="ov-detail-label">Status</div>' +
+        '<div class="ov-detail-value">In progress</div>' +
+      '</div>' +
+      '<div class="ov-detail-block">' +
+        '<div class="ov-detail-note">Full Activity overview screen — custom design pending.</div>' +
+      '</div>';
+
+    activeOverlay = 'chip';
+    chipOverlay.classList.add('open');
+  }
+
+  function closeChipOverlay() {
+    activeOverlay = null;
+    chipOverlay.classList.remove('open');
+  }
+
+  chipBack.addEventListener('click', closeChipOverlay);
+  chipOvLsk.addEventListener('click', closeChipOverlay);
+
+  // ── Scope tabs ─────────────────────────────────────────────────────────────
+
+  function setScope(idx) {
+    scopeIdx = ((idx % scopeTabEls.length) + scopeTabEls.length) % scopeTabEls.length;
+    scopeTabEls.forEach(function(t, i) { t.classList.toggle('active', i === scopeIdx); });
+  }
+
+  scopeTabEls.forEach(function(tab, i) {
+    tab.addEventListener('click', function() { setScope(i); });
+  });
+
+  // ── Date ──────────────────────────────────────────────────────────────────
+
+  document.getElementById('dateStart').addEventListener('click', function() {
+    var wasEmpty = this.classList.contains('empty');
+    this.textContent = wasEmpty ? 'Jan 1st, 2026' : '— start';
+    this.className = 'dr-date ' + (wasEmpty ? 'filled' : 'empty');
+  });
+
+  // ── Mode ───────────────────────────────────────────────────────────────────
+
+  function updateMode() {
+    if (navMode === 'line') {
+      modeEl.innerHTML = '&#8597; line &middot; <em>* chunk</em>';
+      applyFocus();
+    } else {
+      modeEl.innerHTML = '&#8597; chunk &middot; <em>* line</em>';
+      clearAllFocus();
+      cskEl.textContent = '·';
+    }
+  }
+
+  // ── Keyboard ───────────────────────────────────────────────────────────────
+
+  document.addEventListener('keydown', function(e) {
+    if (activeOverlay === 'act' || activeOverlay === 'chip') {
+      if (e.key === 'Backspace' || e.key === 'Escape') {
+        if (activeOverlay === 'act') closeActOverlay();
+        else closeChipOverlay();
+        e.preventDefault();
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case '*':
+        navMode = navMode === 'line' ? 'chunk' : 'line';
+        updateMode();
+        e.preventDefault();
+        break;
+
+      case 'ArrowDown':
+        if (navMode === 'line') {
+          focusIdx = Math.min(focusables.length - 1, focusIdx + 1);
+          applyFocus();
+        } else {
+          summaryEl.scrollTop += CHUNK;
+        }
+        e.preventDefault();
+        break;
+
+      case 'ArrowUp':
+        if (navMode === 'line') {
+          focusIdx = Math.max(0, focusIdx - 1);
+          applyFocus();
+        } else {
+          summaryEl.scrollTop -= CHUNK;
+        }
+        e.preventDefault();
+        break;
+
+      case 'ArrowRight':
+        setScope(scopeIdx + 1);
+        e.preventDefault();
+        break;
+
+      case 'ArrowLeft':
+        setScope(scopeIdx - 1);
+        e.preventDefault();
+        break;
+
+      case 'Enter':
+        if (navMode === 'line') activate();
+        e.preventDefault();
+        break;
+
+      case '1': showToast('New Expense record'); e.preventDefault(); break;
+      case '2': showToast('New COGS record');    e.preventDefault(); break;
+      case '3': showToast('New Income record');  e.preventDefault(); break;
+
+      case 'a': case 'A':
+        openActOverlay();
+        e.preventDefault();
+        break;
+
+      case 'Backspace': case 'Escape':
+        showToast('← Close panel');
+        e.preventDefault();
+        break;
+    }
+  });
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+
+  renderChips(); // builds focusables + applies focus
+  updateMode();
+
+}());
+</script>
+</body>
+</html>

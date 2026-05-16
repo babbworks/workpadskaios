@@ -15,7 +15,7 @@
   function save(name, phone) {
     var key = normalizeKey(name);
     return store.get(key).then(function(existing) {
-      var entry = Object.assign(existing || { key: key }, {
+      var entry = merge(existing || { key: key }, {
         name:      name.trim(),
         phone:     (phone || '').trim(),
         updatedAt: Date.now(),

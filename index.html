@@ -11,8 +11,8 @@
 
   <!-- ── Onboarding ──────────────────────────────────────────────────────── -->
   <div id="screen-onboarding" class="screen">
-    <div class="header">
-      <span class="header-title">Welcome</span>
+    <div class="screen-crumb">
+      <span class="sc-label">Welcome</span>
     </div>
     <div class="content" style="padding:16px;">
       <div style="margin-bottom:16px; font-size:13px; color:var(--text-muted); line-height:1.6;">
@@ -28,8 +28,23 @@
         <input class="field-input" id="onboard-phone" type="tel"
           placeholder="e.g. +44 7700 900123" autocomplete="off">
       </div>
+      <div class="field-group" style="margin-top:4px;">
+        <div class="field-label">Country / Region</div>
+        <select class="field-input" id="onboard-locale">
+          <option value="gb-v1">United Kingdom (GBP &middot; VAT 20%)</option>
+          <option value="ng-v1">Nigeria (NGN &middot; VAT 7.5%)</option>
+          <option value="ke-v1">Kenya (KES &middot; VAT 16%)</option>
+          <option value="za-v1">South Africa (ZAR &middot; VAT 15%)</option>
+          <option value="gh-v1">Ghana (GHS &middot; VAT 12.5%)</option>
+          <option value="us-v1">United States (USD)</option>
+          <option value="eu-v1">Europe (EUR &middot; VAT 20%)</option>
+          <option value="in-v1">India (INR &middot; GST 18%)</option>
+          <option value="ph-v1">Philippines (PHP &middot; VAT 12%)</option>
+          <option value="au-v1">Australia (AUD &middot; GST 10%)</option>
+        </select>
+      </div>
       <div style="margin-top:8px; font-size:11px; color:var(--text-muted);">
-        Name appears on records you create.
+        Sets currency and tax defaults on your records.
       </div>
     </div>
     <div class="softkeys">
@@ -39,106 +54,202 @@
     </div>
   </div>
 
+  <!-- ── Country selector ────────────────────────────────────────────────── -->
+  <div id="screen-country" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label">Select Country</span>
+      <span class="sc-back" onclick="CountryScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="content" id="country-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Back</span>
+      <span class="sk-csk">Select</span>
+      <span class="sk-rsk"></span>
+    </div>
+  </div>
+
   <!-- ── Main record list ─────────────────────────────────────────────────── -->
   <div id="screen-list" class="screen active">
-    <div class="header">
-      <span class="header-title">Workpads</span>
-      <span class="header-badge" id="list-count"></span>
-    </div>
     <div class="content" id="list-content"></div>
     <div class="softkeys">
-      <span class="sk-lsk">Manage</span>
+      <span class="sk-lsk">Info</span>
       <span class="sk-csk">Open</span>
-      <span class="sk-rsk">New</span>
+      <span class="sk-rsk">Me</span>
     </div>
   </div>
 
   <!-- ── PADS Wizard ──────────────────────────────────────────────────────── -->
   <div id="screen-wizard" class="screen">
-    <div class="header">
-      <span class="header-title" id="wizard-title">New Record</span>
+    <div class="screen-crumb wizard-crumb">
+      <span class="sc-label" id="wizard-title">New Record</span>
+      <span class="sc-type-tag" id="wiz-type-tag"></span>
+      <span class="sc-back" onclick="WizardScreen.onKey('Backspace')">&#8249; Back</span>
     </div>
     <div class="wizard-progress" id="wizard-tabs">
       <span class="wizard-tab active" data-screen="0">P</span>
       <span class="wizard-tab" data-screen="1">A</span>
       <span class="wizard-tab" data-screen="2">D</span>
       <span class="wizard-tab" data-screen="3">S</span>
+      <span class="wizard-tab" data-screen="4">F</span>
     </div>
     <div class="wizard-dots" id="wizard-dots">
       <div class="wizard-dot active"></div>
       <div class="wizard-dot"></div>
       <div class="wizard-dot"></div>
       <div class="wizard-dot"></div>
+      <div class="wizard-dot"></div>
     </div>
     <div class="content" id="wizard-content"></div>
     <div class="softkeys" id="wizard-softkeys">
-      <span class="sk-lsk" id="wiz-lsk">Cancel</span>
+      <span class="sk-lsk">Info</span>
       <span class="sk-csk" id="wiz-csk">Next</span>
-      <span class="sk-rsk" id="wiz-rsk">Save</span>
+      <span class="sk-rsk">Me</span>
     </div>
   </div>
 
   <!-- ── Record view ──────────────────────────────────────────────────────── -->
   <div id="screen-view" class="screen">
-    <div class="header">
-      <span class="header-title" id="view-title">Record</span>
+    <div class="screen-crumb">
+      <span class="sc-label" id="view-title">Record</span>
+      <span class="sc-back" onclick="ViewScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="view-toolbar">
+      <select id="view-sec-sel" class="view-tb-sel"></select>
+      <div id="view-toggle-btn" class="view-tb-toggle" title="Expand / collapse sections"></div>
+      <input  id="view-search"  class="view-tb-search" type="text" placeholder="Search&#x2026;" autocomplete="off" autocorrect="off" spellcheck="false">
     </div>
     <div class="content" id="view-content"></div>
     <div class="softkeys">
-      <span class="sk-lsk" id="view-lsk">Back</span>
-      <span class="sk-csk">Edit</span>
-      <span class="sk-rsk">Options</span>
+      <span class="sk-lsk">Info</span>
+      <span class="sk-csk" id="view-csk">Edit</span>
+      <span class="sk-rsk">Me</span>
+    </div>
+  </div>
+
+  <!-- ── Note share screen ───────────────────────────────────────────────── -->
+  <div id="screen-note-share" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label" id="note-share-title">Share Note</span>
+      <span class="sc-back" onclick="NoteShareScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="content" id="note-share-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk" id="note-share-lsk">Back</span>
+      <span class="sk-csk" id="note-share-csk">Next</span>
+      <span class="sk-rsk"></span>
     </div>
   </div>
 
   <!-- ── Share screen ─────────────────────────────────────────────────────── -->
   <div id="screen-share" class="screen">
-    <div class="header">
-      <span class="header-title">Share</span>
+    <div class="screen-crumb">
+      <span class="sc-label">Share</span>
+      <span class="sc-back" onclick="ShareScreen.onKey('Backspace')">&#8249; Back</span>
     </div>
     <div class="content" id="share-content"></div>
     <div class="softkeys">
-      <span class="sk-lsk">Back</span>
+      <span class="sk-lsk">Info</span>
       <span class="sk-csk">Copy</span>
-      <span class="sk-rsk"></span>
+      <span class="sk-rsk">Me</span>
     </div>
   </div>
 
   <!-- ── Management screen ────────────────────────────────────────────────── -->
   <div id="screen-management" class="screen">
-    <div class="header">
-      <span class="header-title">Manage</span>
+    <div class="screen-crumb">
+      <span class="sc-label">Manage</span>
+      <span class="sc-back" onclick="ManagementScreen.onKey('Backspace')">&#8249; Back</span>
     </div>
     <div class="wizard-progress" id="mgmt-tabs">
       <span class="wizard-tab active" data-tab="records">Records</span>
       <span class="wizard-tab" data-tab="personal">Personal</span>
+      <span class="wizard-tab" data-tab="activities">Activities</span>
       <span class="wizard-tab" data-tab="settings">Settings</span>
     </div>
     <div class="content" id="mgmt-content"></div>
     <div class="softkeys">
-      <span class="sk-lsk">Back</span>
-      <span class="sk-csk"></span>
-      <span class="sk-rsk" id="mgmt-rsk"></span>
+      <span class="sk-lsk">Info</span>
+      <span class="sk-csk" id="mgmt-csk"></span>
+      <span class="sk-rsk">Me</span>
     </div>
   </div>
 
-  <!-- ── Workpads Panel (ArrowLeft overlay) ───────────────────────────────── -->
+  <!-- ── NewEnt Business Wizard screen ─────────────────────────────────── -->
+  <div id="screen-newent-wizard" class="screen">
+    <div class="screen-crumb wizard-crumb">
+      <span class="sc-label" id="newent-wizard-title">New Business</span>
+      <span class="sc-back" onclick="NewEntWizardScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="content" id="newent-wizard-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Info</span>
+      <span class="sk-csk" id="newent-wiz-csk">Next</span>
+      <span class="sk-rsk">Me</span>
+    </div>
+  </div>
+
+  <!-- ── Ledger Entry screen ─────────────────────────────────────────────── -->
+  <div id="screen-ledger" class="screen">
+    <div class="screen-crumb ledger-crumb">
+      <span class="sc-label" id="ledger-title">New Entry</span>
+      <span class="sc-type-tag" id="ledger-type-tag"></span>
+      <span class="sc-back" onclick="LedgerScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="ledger-type-tabs" id="ledger-type-tabs">
+      <span class="ledger-tab active" data-ltype="expense">Exp</span>
+      <span class="ledger-tab" data-ltype="cogs">COGS</span>
+      <span class="ledger-tab" data-ltype="payment">Inc</span>
+    </div>
+    <div class="content" id="ledger-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Info</span>
+      <span class="sk-csk" id="ledger-csk">Save</span>
+      <span class="sk-rsk">Me</span>
+    </div>
+  </div>
+
+  <!-- ── Archive screen ─────────────────────────────────────────────────── -->
+  <div id="screen-archive" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label">Archive</span>
+      <span class="sc-back" onclick="ArchiveScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="content" id="archive-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Info</span>
+      <span class="sk-csk" id="archive-csk">Restore</span>
+      <span class="sk-rsk" style="color:var(--danger);">Delete</span>
+    </div>
+  </div>
+
+  <!-- ── Panel backdrop (country image, z-index 98) ───────────────────────── -->
+  <div id="panel-backdrop"></div>
+
+  <!-- ── Workpads Panel (LSK overlay) ────────────────────────────────────── -->
   <div id="panel-workpads" class="panel panel-workpads">
-    <div class="panel-header">Workpads</div>
+    <div class="panel-header pb-header" id="panel-workpads-header">
+      <span class="pb-logo">W</span>
+      <div class="pb-hicons">
+        <div class="pb-hicon pb-hicon-dollar" id="pb-btn-financial">$</div>
+        <div class="pb-hicon pb-hicon-act"    id="pb-btn-activity">A</div>
+        <div class="pb-hicon"                 id="pb-btn-settings">&#9881;</div>
+      </div>
+    </div>
     <div class="panel-content" id="panel-workpads-content"></div>
     <div class="panel-softkeys">
       <span class="sk-lsk" style="font-size:10px;color:var(--accent);padding:0 6px;">Close</span>
       <span class="sk-csk" style="font-size:10px;color:var(--accent);">Open</span>
+      <span class="sk-rsk" style="font-size:10px;color:var(--accent);padding:0 6px;">Manage</span>
     </div>
   </div>
 
-  <!-- ── Personal Panel (ArrowRight overlay) ──────────────────────────────── -->
+  <!-- ── Personal Panel (RSK overlay) ────────────────────────────────────── -->
   <div id="panel-personal" class="panel panel-personal">
-    <div class="panel-header">Personal</div>
     <div class="panel-content" id="panel-personal-content"></div>
     <div class="panel-softkeys">
-      <span class="sk-lsk" style="font-size:10px;color:var(--accent);padding:0 6px;">Note</span>
-      <span class="sk-csk" style="font-size:10px;color:var(--accent);">Open</span>
+      <span class="sk-lsk" style="font-size:10px;color:var(--accent);padding:0 6px;">Manage</span>
+      <span class="sk-csk" style="font-size:10px;color:var(--accent);">New Note</span>
+      <span class="sk-rsk" style="font-size:10px;color:var(--accent);padding:0 6px;">Close</span>
     </div>
   </div>
 
@@ -153,26 +264,53 @@
     </div>
   </div>
 
-  <!-- ── Quick Note overlay ───────────────────────────────────────────────── -->
-  <div id="overlay-quicknote" style="display:none; position:absolute; top:0; left:0; width:240px; height:320px; background:rgba(0,0,0,0.85); z-index:200; flex-direction:column; justify-content:center; padding:20px;">
-    <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">Quick Note</div>
-    <textarea id="quicknote-input" style="width:100%; height:120px; background:var(--bg2); color:var(--text); border:1px solid var(--border); padding:8px; font-size:12px; font-family:inherit; resize:none;"></textarea>
-    <div style="margin-top:8px; font-size:11px; color:var(--text-muted);">CSK: Save  LSK: Cancel</div>
+  <!-- ── Shortcut map overlay ─────────────────────────────────────────────── -->
+  <div id="overlay-shortcuts" style="display:none; position:absolute; top:0; left:0; width:240px; height:320px; background:rgba(0,0,0,0.88); z-index:200; flex-direction:column;">
+    <div style="height:32px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 10px; font-size:12px; font-weight:bold; color:var(--text); flex-shrink:0;">Keys</div>
+    <div id="shortcuts-content" style="flex:1; overflow-y:auto; padding:6px 0;"></div>
+    <div class="softkeys">
+      <span class="sk-lsk"></span>
+      <span class="sk-csk">Close</span>
+      <span class="sk-rsk"></span>
+    </div>
   </div>
 
-  <!-- ── Scripts: lib → services → screens → app ──────────────────────────── -->
+  <!-- ── Quick Note overlay ───────────────────────────────────────────────── -->
+  <div id="overlay-quicknote" style="display:none; position:absolute; top:0; left:0; width:240px; height:320px; background:rgba(0,0,0,0.85); z-index:200; flex-direction:column; justify-content:center; padding:20px;">
+    <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">New Note</div>
+    <textarea id="quicknote-input" style="width:100%; height:120px; background:var(--bg2); color:var(--text); border:1px solid var(--border); padding:8px; font-size:12px; font-family:inherit; resize:none; direction:ltr; unicode-bidi:plaintext;"></textarea>
+    <div style="margin-top:10px; display:flex; gap:8px;">
+      <span id="qn-cancel-btn" style="flex:1; padding:7px 0; text-align:center; font-size:11px; color:var(--text-muted); background:var(--bg2); border:1px solid var(--border); cursor:pointer;">Cancel</span>
+      <span id="qn-save-btn" style="flex:1; padding:7px 0; text-align:center; font-size:11px; color:var(--accent); background:rgba(74,158,255,0.1); border:1px solid var(--accent); cursor:pointer; font-weight:bold;">Save</span>
+    </div>
+  </div>
+
+  <!-- ── Scripts: lib → services → demo seed → screens → app ─────────────── -->
+  <script src="js/lib/utils.js"></script>
+  <script src="js/lib/countries.js"></script>
   <script src="js/lib/fflate.js"></script>
   <script src="js/lib/codec.js"></script>
+  <script src="js/TemplateRegistry.js"></script>
+  <script src="js/NoteCodec.js"></script>
   <script src="js/StorageAdapter.js"></script>
   <script src="js/ActivityService.js"></script>
+  <script src="js/WorkActivityService.js"></script>
   <script src="js/RecordService.js"></script>
+  <script src="js/FinancialModel.js"></script>
   <script src="js/PersonalService.js"></script>
   <script src="js/BlockRegistry.js"></script>
+  <script src="js/lib/demo.js"></script>
   <script src="js/screens/list.js"></script>
   <script src="js/screens/wizard.js"></script>
   <script src="js/screens/view.js"></script>
   <script src="js/screens/share.js"></script>
+  <script src="js/screens/note-share.js"></script>
   <script src="js/screens/management.js"></script>
+  <script src="js/NewEntTemplate.js"></script>
+  <script src="js/screens/newent-wizard.js"></script>
+  <script src="js/screens/ledger.js"></script>
+  <script src="js/screens/country.js"></script>
+  <script src="js/screens/archive.js"></script>
   <script src="js/panels/WorkpadsPanel.js"></script>
   <script src="js/panels/PersonalPanel.js"></script>
   <script src="js/app.js"></script>
