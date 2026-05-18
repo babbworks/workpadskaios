@@ -66,7 +66,7 @@
       '</div>' +
       '<div class="view-field">' +
         '<div class="view-field-label">Powered by</div>' +
-        '<div class="view-field-value" style="color:var(--text-muted);">Workpads v0.2.0 · bitpad-c (1eg/) codec</div>' +
+        '<div class="view-field-value" style="color:var(--text-muted);">Workpads v0.2.0 · pads-v1 (1pa/) codec</div>' +
       '</div>';
 
     WorkpadsPanel.setContext({ screen: 'share', record: rec, url: currentUrl });

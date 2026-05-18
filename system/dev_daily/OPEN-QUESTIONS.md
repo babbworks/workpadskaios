@@ -313,29 +313,35 @@ These are places where the current design has an unresolved question about how s
 
 ---
 
-### OQ-7 — DOMAIN=11 (hybrid): PENDING ACTIVE DESIGN
+### OQ-7 — DOMAIN=11 (hybrid): ✓ RESOLVED 2026-05-17
 
-**Status:** To be designed in an upcoming session. Slot is live — not an error code, not permanently reserved. Decoder should treat as "unknown, skip gracefully" until the design is settled.
+**Decision summary:**
+- **When produced:** Option A — always on when DOMAIN≥01. Every financial record encoded as DOMAIN=11 with deterministic Account Pair from entry type matching table (FRAME-SPEC §17.5). `ACCOUNT_PAIR=1110` (Correction/Netting) written when entry type unknown (API/programmatic bypass).
+- **Matching table:** Entry Type × I>O State × EXPENSE_CAT → Account Pair, fully deterministic. No inference ambiguity. See FRAME-SPEC §17.5.
+- **Type-change reconciliation:** Built into creation screen. Direction flip, TIME bit toggle, EXPENSE_CAT change, and template switch all have defined cascade rules. Worker amounts never silently discarded. See FRAME-SPEC §17.6.
+- **Amendment/annotation path:** Option A — `COMMIT_TYPE=11` State Commit carries `domain_upgrade` block (parent UID + `account_pair_byte` + classifier identity). Original record untouched. Chain reader combines both.
+- **DOMAIN=10 scope:** Option B — integration-only, no wizard UI. Full codec encode/decode. App renders in read-only "accounting entry" view for journal entries, accruals, period-close adjustments.
+- **Display model:** "Show accounting detail" toggle per record (persistent). When expanded shows plain-English classification + two entry destinations (debit account + credit account) derived from Account Pair code and AP_DIRECTION bit. Example: Type: Operating Expense / Debit: Expenses (Operating) / Credit: Assets (Cash).
 
-**Intent:** A hybrid mode carrying both I>O worker-facing classification and BitLedger Account Pair in the same record — readable fully by both a field worker and an accountant. Design session pending.
+**Full spec:** FRAME-SPEC.md §17 (layout, codes, UI model, inference table, matching table §17.5, type-change reconciliation §17.6).
 
 ---
 
 ### OQ-8 — Amendment record: CHAIN or UID for parent reference? ✓ RESOLVED
 
-**Decision:** CHAIN as primary (`meta1 CHAIN=1`, parent ref in `&c=` URL suffix). Consistent with existing child-record design. UID field (FLAGS3 bit 5) may optionally supplement for archival contexts. Amendment does not require the parent to have a UID.
+**Decision (updated 2026-05-17):** Option C — CHAIN=1 in meta1 + `&c=` URL suffix as primary (zero wire overhead). Optional `parent_uid` (8 bytes, SHA-256 of parent frame bytes truncated) embedded in frame when self-contained reference required. **Mandatory** when: writing to a Marker (`#1pm/`), or BASE_TEMPLATE=110 + DOMAIN≥01 (financial amendment). Flag: `HAS_PARENT_UID` in `amendment_flags` extension byte. Dispute amendments use `DISPUTE_LINK=1` flag — links into agreement trail without polluting State Commit sequence.
 
 ---
 
-### OQ-9 — ROUNDING in standard mode: 1 bit vs 2 bits ✓ RESOLVED
+### OQ-9 — ROUNDING in standard mode: 1 bit vs 2 bits ✓ RESOLVED (flagged for review)
 
-**Decision:** Accept 1-bit rounding in standard mode. Account Pair fidelity is the priority; rounding granularity loss is an acceptable tradeoff. Standard mode is opt-in for accountants who have batch-level rounding context anyway.
+**Decision (updated 2026-05-17):** 1-bit rounding toggle retained in Simple mode — worker can explicitly set round-up (1) or round-down (0); absent = round-to-nearest. QTY_TIME encoding uses ROUNDING bits for 5-min boundary rounding (10=up, 11=down, 00=exact). Flagged for post-MVP review — rounding behaviour in Standard (Account Pair) mode may need separate treatment.
 
 ---
 
 ### OQ-10 — IS_ORG + individual's org affiliation in participants ✓ RESOLVED
 
-**Decision:** Two entries (individual + org) is the valid inline pattern when both are needed in a transaction record. Contact/entity record (BASE_TEMPLATE=011) is canonical for anyone the worker deals with regularly — the participants block carries only the brief transaction snapshot. Two-entry pattern is explicitly noted as valid in the participants block spec.
+**Decision (updated 2026-05-17):** Sole trader dual-name support added. `part_flags` bit 1 repurposed: when ROLE_TYPE≠11, bit 1 = `HAS_TRADING_NAME` (trading name or company name distinct from personal name follows as a second name field). When ROLE_TYPE=11, bit 1 retains its existing meaning (HAS_ROLE_TEXT). Sender controls what to include: personal name only, trading name only, or both. Shell display: template controls which name leads; default = trading_name when present, personal name as fallback.
 
 ---
 
@@ -345,9 +351,17 @@ These require a design choice, not just a value.
 
 ---
 
-### OQ-11 — FLAGS4 layout for Contact/entity template ✓ PARTIALLY RESOLVED
+### OQ-11 — FLAGS4 layout for Contact/entity template ✓ RESOLVED
 
-**Decision:** Assign only confirmed fields now; leave bits 3–6 explicitly reserved for future Contact fields (website, social handle, alt_phone, relationship, lang, timezone etc.). Bit 7 chains to FLAGS5 — no field slot ever runs out.
+**Decision (updated 2026-05-17):** Full FLAGS4 Contact/entity layout assigned:
+- bit 0: `website` [u16 len][UTF-8]
+- bit 1: `social_handle` [u8 len][UTF-8]
+- bit 2: `business_hours` [u16 len][UTF-8] (structured block post-MVP)
+- bit 3: `category` 1B trade enum (ROLE-CODEBOOK.md §3)
+- bit 4: `alt_phone` [u16 len][UTF-8] E164
+- bit 5: `meeting_location` [u16 len][UTF-8]
+- bit 6: reserved
+- bit 7: FLAGS5_PRESENT
 
 **Current FLAGS4 assignment (Contact/entity template):**
 - bit 0: `bday` — date of birth (uint16 days, COMPACT_TIME applies)
@@ -362,13 +376,13 @@ These require a design choice, not just a value.
 
 ### OQ-12 — QTY_COMPACT for fractional hours ✓ RESOLVED
 
-**Decision:** QTY_COMPACT=1 for integer-unit records only (parts, visits, whole km, whole hours). QTY_COMPACT=0 (separate qty_rate_block, 6 bytes) for any fractional quantity. Encoder decides based on whether qty fits within SPLIT_POINT bits after applying DECIMAL_POS. The `qty_unit` field (FLAGS3 bit 2) carries the unit label ("h", "km", etc.) regardless of path.
+**Decision (updated 2026-05-17):** `QTY_TIME` encoding added for time-unit quantities. 2 bytes: `hours (uint8, 0–255)` + `minutes_index (uint8, 0–11; × 5 = actual minutes)`. Supports 5-minute precision; max 255h 55min. UI presents 15-min and 10-min shortcuts. QTY_COMPACT unchanged for non-time quantities. ROUNDING bits apply to 5-min boundary rounding. Triggered when `qty_unit` field indicates a time unit.
 
 ---
 
 ### OQ-13 — State Commit record: financial block structure ✓ RESOLVED
 
-**Decision:** State Commit uses `setup_byte` for currency/decimal context but no `transaction_byte`. `fin_control` present with CUSTOMER_AMT and/or WORKER_AMT as needed. COMPOUND_VALUE=1 for period/annual summaries (compound lines carry income total, expense total, net by category). Direction is implied by record type — no I>O encoding on a snapshot.
+**Decision (updated 2026-05-17):** State Commit carries a **summary-only** financial block — key confirmation data, not full line detail. `setup_byte` present; no `transaction_byte`. Financial summary: `total_amount (uint24)` + `line_count (uint8)` mandatory (Level A, 4 bytes). Optional extensions: `tax_total (uint24)`, `compound_summary` (compact per-line description+amount), `fingerprint (6 bytes, SHA-256 of original financial bytes truncated)` for tamper evidence. Level B/C/D extension slots named but unspecified. Guest viewer confirmation signature: `device_fingerprint (6B)` + `timestamp (2B)` + tap confirmation (1-bit) + optional `identity_anchor (9B)` (hashed phone/email). COMMIT_TYPE updated: 00=job close, 01=payment confirmed, 10=terms agreed, 11=reserved. Disputes handled via Amendment + DISPUTE_LINK, optionally logged into agreement trail.
 
 | COMMIT_TYPE | Financial block |
 |---|---|
@@ -381,9 +395,11 @@ These require a design choice, not just a value.
 
 ---
 
-## Group 4 — Security Layer (OQ-14)
+## Group 4 — Security Layer (OQ-14) ✓ DESIGN COMPLETE
 
 Full design spec for the scrambling and encryption layer. The frame codec (FRAME-SPEC.md) is unchanged — this is a wrapper applied around the encoded frame before URL embedding.
+
+**Design document:** `dev_daily/draft_specs/SECURITY-DESIGN.md` (draft-spec status, 2026-05-17). FRAME-SPEC §12 updated to match canonical design. All 11 sub-decisions (OQ-14a through OQ-14k) resolved; open sub-questions OQ-14l through OQ-14p logged in SECURITY-DESIGN.md §10.
 
 ---
 
@@ -708,6 +724,21 @@ These arise from two connected product needs: (a) converting any system template
 
 **Decision:** Canonical form confirmed as proposed. Exclude `id`, `name`, `protected` from hash. Sort keys alphabetically, strip whitespace, UTF-8 encode, SHA-256. ✓ RESOLVED
 
+**Template System Design Session — 2026-05-17 — all sub-questions resolved:**
+- **Custom template ID namespace:** EXT_TEMPLATE path; TEMPLATE_ID=1111 reserved = "custom, hash follows." CODEC-4 covers full encoding.
+- **Template update delivery:** System templates bundled in app (update via app releases). Sector templates peer-to-peer via Data Sync Bundle. CDN fallback on-demand only when record is already being opened. No startup network calls.
+- **`#te/` key derivation:** Both modes supported. `HKDF_KEY` flag in preamble byte bit 3 (bit 3 now `HKDF_KEY`; KEY_HINT shrinks to bits 2–0). `HKDF_KEY=1` default for new templates; `HKDF_KEY=0` for backward compatibility.
+- **`#te/` security UX:** One-time disclosure per template per contact at first share. Plain-language notice. Then silent.
+- **GPS location encoding:** Both modes. UTF-8 string in existing `location` field (default MVP). Compact binary `[int16 lat×100][int16 lon×100]` = 4 bytes via FLAGS4 bit 2 (`gps_binary`). ±1.1 km precision. Both can coexist in same record.
+- **Signature field:** Reserved; post-MVP. Content-addressed attachment reference preferred (not inline base64).
+- **Sector template distribution:** Lean app. Peer-to-peer primary; CDN fallback only.
+- **Invoice wizard compound frame:** In MVP — app-generated multiple line items.
+- **Form builder "line items" toggle:** Yes — declares compound frame, fixed standard schema.
+- **Custom line item schema (user-defined fields in repeating section):** Post-MVP. Slot reserved.
+- **Formula storage (CODEC-3):** Dual-layer — infix string in template JSON (authoring) + compiled RPN bytecode in `trig_block` (offline evaluation). Resolved.
+
+**Full design doc:** TEMPLATE-SYSTEM-DESIGN.md in draft_specs/
+
 ---
 
 ### OQ-16 — Template sharing: mechanism hierarchy and URL format
@@ -872,19 +903,19 @@ Any modification to a shared protected template creates a new template (new `id`
 | OQ-4 | Constant | TAX_CODE 01/10 rates | Low — two percentages | Yes — blocks tax display |
 | OQ-5 | Constant | uint length-prefix endianness | Low — pick LE or BE | Yes — a mismatch corrupts all frames |
 | OQ-6 | Ambiguity | TAX_CODE: amount stored or computed? | Low — clarify intent | Yes — affects tax accounting |
-| OQ-7 | Ambiguity | DOMAIN=11 hybrid: reserved or future? | Low — affirm reservation | No — decoder just rejects |
+| OQ-7 | Ambiguity | DOMAIN=11 hybrid mode | **✓ RESOLVED 2026-05-17** — always-on; deterministic matching table; type-change reconciliation; amendment path; DOMAIN=10 integration-only; accounting detail toggle | — |
 | OQ-8 | Ambiguity | Amendment: CHAIN or UID for parent? | Medium — affects Amendment structure | No — Amendment implementation is later |
 | OQ-9 | Ambiguity | Standard mode 1-bit ROUNDING: accept? | Low — affirm the tradeoff | No — standard mode is secondary |
 | OQ-10 | Ambiguity | IS_ORG + individual's org name | Medium — participants block gap | No — uncommon use case |
 | OQ-11 | Design gap | FLAGS4 layout for Contact/entity | Medium — needs 5 field definitions | No — Contact/entity template is later |
 | OQ-12 | Design gap | QTY_COMPACT for fractional hours | Low — encoder rule of thumb | No — compact mode is optimisation |
 | OQ-13 | Design gap | State Commit financial block structure | Medium — new sub-spec needed | No — State Commits are non-MVP |
-| OQ-14 | Security layer | Scrambling + encryption wrapper design | High — full design spec, 11 sub-decisions | No — MVP records work without it |
-| OQ-15 | Template system | Template definition schema + canonical serialisation for hashing | Medium — schema proposed; canonical field list needs confirming | No — needed before `1pt` implementation |
-| OQ-16 | Template system | Template sharing mechanism + fragment URL format | **Resolved** — `/t/` path dropped; `#t/` and `#te/` fragments adopted; QR/NFC canonical for protected templates | No — needed before `1pt` implementation |
-| OQ-17 | Template system | Form builder field type vocabulary (10 types proposed) | Low — list near-complete; `select` choices storage TBD | No — needed before form builder |
-| OQ-18 | Template system | Protected template immutability + UI policy | Low — immutability rule clear; metadata-only edit exception to confirm | No — needed before form builder |
-| OQ-19 | Template system | Template versioning + historical decode (content-addressed storage) | Medium — content-addressed model proposed; vs version-in-URL alternative | No — needed before `1pt` implementation |
+| OQ-14 | Security layer | Scrambling + encryption wrapper design | **Design complete** — SECURITY-DESIGN.md; OQ-14l–p open | No — MVP records work without it |
+| OQ-15 | Template system | Template definition schema + canonical serialisation for hashing | **✓ RESOLVED 2026-05-17** — TEMPLATE-SYSTEM-DESIGN.md; all 11 sub-decisions logged | — |
+| OQ-16 | Template system | Template sharing mechanism + fragment URL format | **✓ RESOLVED** — `#t/` and `#te/` fragments; QR/NFC canonical | — |
+| OQ-17 | Template system | Form builder field type vocabulary | **✓ RESOLVED 2026-05-17** — 11 types; GPS dual-mode; signature deferred | — |
+| OQ-18 | Template system | Protected template immutability + UI policy | **✓ RESOLVED** — immutability rule; edit = duplicate and edit | — |
+| OQ-19 | Template system | Template versioning + historical decode (content-addressed storage) | **✓ RESOLVED** — content-addressed; template_id → [hash_v1, hash_v2, …] local index | — |
 
 **Hard blockers before any codec.js work starts:** OQ-1, OQ-2, OQ-5  
 **Needed before first real record encodes correctly:** OQ-3, OQ-4, OQ-6  
@@ -1367,7 +1398,109 @@ The postMessage `trigger` type from OQ-26 allows running JS to invoke TRIG opcod
 
 - **OQ-32a**: Should BLOOM bit definitions be versioned with TRIG VER, or fixed to a separate capability codebook version? (Low priority — v1 can hardcode.)
 - **OQ-32b**: Should the EXTENDED opcode space (0xF_) reserve a range for user-defined opcodes, or is it entirely reserved for future TRIG spec revisions?
-- **OQ-32c**: TRIG block location in frame — currently inside display_schema. Should it have its own block-present bit in meta2 (for records that carry TRIG but no other display schema)? Active layout question.
+- **OQ-32c**: TRIG block location in frame ✓ RESOLVED — Option B: meta2 bit 5 (`HAS_TRIG_BLOCK`). TRIG is a top-level block appearing after the participants block. display_flags2 bit 2 freed. FRAME-SPEC §2 and §13 to be updated.
+
+---
+
+---
+
+### OQ-34 — Agreements and Commitment Protocol ✓ DRAFT-SPEC 2026-05-17
+
+**Status:** Draft-spec complete — AGREEMENTS-DESIGN.md hardened 2026-05-17
+
+Three-tier design in progress: (1) Light agreement — State Commit + ACK_REQUEST chain, Tier 1 for v1.0. (2) Structured Agreement — clause block, milestone dates, per-clause acceptance, post-MVP. (3) Commitment Protocol — evaluatable condition bytecode (TRIG-adjacent), long-term.
+
+**Resolved sub-questions:**
+- OQ-34a: EXT_TEMPLATE domain extension ✓ (BASE_TEMPLATE=111 stays Generic)
+- OQ-34b: New clause block structure ✓ (defined in §3.2)
+- OQ-34c: 1-byte ratification bitmap ✓ (bits 0–6 parties; bit 7 FULLY_RATIFIED)
+- OQ-34d: State machine defined ✓ (PROPOSED→REVIEWED→ACCEPTED→ACTIVE→COMPLETED/DISPUTED/CANCELLED)
+- OQ-34e: Separate C-TRIG evaluator, shared condition registry ✓
+- OQ-34f: Acceptance granularity — Tier-dependent: whole-record (T1), per-clause bitmask (T2+) ✓
+- OQ-34g: Dispute protocol — C-TRIG DISPUTE + Amendment (with Amendment-only fallback) ✓
+- OQ-34h: Offline Marker writes — hardware fully offline; software queued or P2P ✓
+
+**Key design reference:** AGREEMENTS-DESIGN.md (draft-spec), MARKERS-DESIGN.md (draft-spec)
+
+---
+
+### OQ-35 — Markers: Electronic Commitment Coins ✓ DRAFT-SPEC 2026-05-17
+
+**Status:** Draft-spec complete — MARKERS-DESIGN.md hardened 2026-05-17
+
+Markers are physical/software tokens that hold a ratified workpads commitment. Write-once by two parties; permanently read-only after ratification. Hardware target: NTAG215 NFC sticker (504B). Software fallback: server-side WORM with signed seal.
+
+**Immediate sub-questions:**
+- OQ-35a (OQ-M1): UID assignment ✓ — deterministic derivation; phone-hash proxy
+- OQ-35b (OQ-M2): Write sequencing ✓ — either party writes first
+- OQ-35c (OQ-M5): `#1pm/` tag ✓ — registered in TAG-REFERENCE.md
+- OQ-35d (OQ-M6): Offline write ✓ — prev_stone_hash ordering; hardware fully offline; software P2P option (Option E) added
+- OQ-35e (OQ-M3): Multi-party ✓ — up to 7 slots; threshold sealing
+- OQ-35f: Software P2P Marker ✓ — Option E: direct device exchange, no internet, QR/NFC token swap protocol
+
+**Key design reference:** MARKERS-DESIGN.md, AGREEMENTS-DESIGN.md §4
+
+---
+
+### OQ-36 — Attachment: Image Quality Tiers and Inline Thumbnails
+
+**Status:** Active design — ATTACHMENT-DESIGN.md created 2026-05-17
+
+Four-tier progressive image delivery: Tier 0 = inline thumbnail in frame (ThumbHash/quantized, ~40–80B); Tier 1 = 320×240 JPEG Q40 (~10–20KB, 2G-viable); Tier 2 = 800×600 JPEG Q65 (~80KB, 3G); Tier 3 = full resolution on demand.
+
+**Immediate sub-questions:**
+- OQ-36a: ThumbHash (~3KB JS library) vs quantized 8×8 grid (no library) — memory constraint tradeoff for KaiOS
+- OQ-36b: Attachment field URL format — `t0:<thumbhash>:<url>?t=<tiers>` — finalise delimiter convention
+- OQ-36c: Multi-image encoding — comma-separated in one attachment field vs compound block vs FLAGS4 second slot
+- OQ-36d: Offline upload deferral — how to handle frame-shares before Tier 1 upload completes
+
+**Key design reference:** ATTACHMENT-DESIGN.md
+
+---
+
+### OQ-37 — Project Association: Structured Multi-Project Linking
+
+**Status:** Active design — PROJECT-ASSOCIATION-DESIGN.md created 2026-05-17
+
+MVP uses `proj:uid` prefix in tag field (FLAGS3 bit 1). Financial items: max 1 project. Service records: multiple OK. Long-term: dedicated `project_ref` block needed for typed UID arrays.
+
+**Immediate sub-questions:**
+- OQ-37a: Tag field max 60B — enough for two `proj:uuid` entries on service records? (UUID v4 = 36 chars, `proj:` = 5 chars → 2 projects = 82B — exceeds limit; need truncated UIDs or larger field)
+- OQ-37b: Project record type — BASE_TEMPLATE=000 Service + project template variant, or BASE_TEMPLATE=111 Generic + DOMAIN bits?
+- OQ-37c: Project UID stability — stable `project_uid` field in FLAGS4 future slot, separate from the record's own uid?
+
+**Key design reference:** PROJECT-ASSOCIATION-DESIGN.md
+
+---
+
+### OQ-38 — Chain UID Exposure in URL Suffix
+
+**Status:** Design note — pending post-MVP decision
+
+The `&c=<parent_uid>` chain parameter in the URL is metadata-visible even when the frame payload is encrypted. An observer can map chain topology (who chains to whom) without decrypting content.
+
+**Options:**
+- Option C (current MVP): accept topology metadata leak — low-risk for most use cases
+- Option A (post-MVP): hashed chain ref `&c=H(uid, record_key)` — topology hidden from observers, resolvable only by key holders
+- Option B (structural change): move parent ref inside the frame — fully private but costs 2+ bytes and breaks the URL-portable chain model
+
+**Decision for MVP:** Option C. Flag for v1.1 review when privacy threat model is assessed against real usage patterns.
+
+---
+
+### OQ-39 — Data Sync Bundle
+
+**Status:** **RESOLVED — Option C** — record-first, missing dependencies fetched and installed silently in background on first open. Cached locally after that for offline use.
+
+A sequenced payload mechanism that hydrates the receiver's app (lists, templates, contact data) before delivering the target record. The final link is the record; prior links outfit the app so it renders correctly.
+
+**Concept:**
+```
+[list_payload_1] → [template_payload] → [contact_data] → [record]
+```
+Each payload in the sequence installs something locally on the receiver's device. When all dependencies are loaded, the final record displays with full fidelity. Eliminates "template not found" and "list not found" degraded experiences.
+
+**Connection to:** Template System design session (OQ-15–19), CDN architecture, `#te/` template distribution, `#l/` list sharing.
 
 ---
 
@@ -1381,19 +1514,19 @@ The postMessage `trigger` type from OQ-26 allows running JS to invoke TRIG opcod
 | OQ-4 | Constant | TAX_CODE 01/10 rates | Low | Yes — blocks tax display |
 | OQ-5 | Constant | uint length-prefix endianness | Low | Yes — mismatch corrupts all frames |
 | OQ-6 | Ambiguity | TAX_CODE: stored or computed? | Low | Yes — affects tax accounting |
-| OQ-7 | Ambiguity | DOMAIN=11 hybrid: reserved? | Low | No |
+| OQ-7 | Ambiguity | DOMAIN=11 hybrid mode | **✓ RESOLVED 2026-05-17** | — |
 | OQ-8 | Ambiguity | Amendment: CHAIN or UID for parent? | Medium | No |
 | OQ-9 | Ambiguity | Standard mode 1-bit ROUNDING | Low | No |
 | OQ-10 | Ambiguity | IS_ORG + individual's org name | Medium | No |
 | OQ-11 | Design gap | FLAGS4 layout for Contact/entity | Medium | No |
 | OQ-12 | Design gap | QTY_COMPACT for fractional hours | Low | No |
 | OQ-13 | Design gap | State Commit financial block structure | Medium | No |
-| OQ-14 | Security layer | Scrambling + encryption wrapper (11 sub-decisions) | High | No — MVP works without it |
-| OQ-15 | Template system | Template definition schema + canonical serialisation | Medium | No — needed before `1pt` |
-| OQ-16 | Template system | Template sharing mechanism + fragment URL format | **Resolved** | — |
-| OQ-17 | Template system | Form builder field type vocabulary | Low | No — needed before form builder |
-| OQ-18 | Template system | Protected template immutability + UI policy | Low | No — needed before form builder |
-| OQ-19 | Template system | Template versioning + historical decode | Medium | No — needed before `1pt` |
+| OQ-14 | Security layer | Scrambling + encryption wrapper | **Design complete** — SECURITY-DESIGN.md | No — MVP works without it |
+| OQ-15 | Template system | Template definition schema + canonical serialisation | **✓ RESOLVED 2026-05-17** | — |
+| OQ-16 | Template system | Template sharing mechanism + fragment URL format | **✓ RESOLVED** | — |
+| OQ-17 | Template system | Form builder field type vocabulary | **✓ RESOLVED 2026-05-17** | — |
+| OQ-18 | Template system | Protected template immutability + UI policy | **✓ RESOLVED** | — |
+| OQ-19 | Template system | Template versioning + historical decode | **✓ RESOLVED** | — |
 | OQ-20 | Presentation | `#1pb/` tag + use case scope | Low | No — needed before `1pb` implementation |
 | OQ-21 | Presentation | Receptive shell architecture | Low | No — needed before `1pb` implementation |
 | OQ-22 | Presentation | Display schema block | Medium | No — needed before `1pb` implementation |
@@ -1410,12 +1543,20 @@ The postMessage `trigger` type from OQ-26 allows running JS to invoke TRIG opcod
 | OQ-32 | Presentation | TRIG display trigger bytecode ✓ SPEC COMPLETE — 1–20 byte stack VM; nibble-encoded opcodes; 12 pattern tokens; condition registry; CSS/JS/theme codebooks; BLOOM anti-bot filter; TERNARY 4-byte shortcut; VER upgrade path | High | No — needed before `1pb`/`1pf` conditional rendering |
 | OQ-33 | Design gap | Inline activity bundle — piggyback compact service list + business profile alongside a record | Medium | No — post-MVP |
 
+| OQ-34 | Design gap | Agreements and Commitment Protocol | **✓ DRAFT-SPEC 2026-05-17** — EXT_TEMPLATE, tier-dependent acceptance, C-TRIG+Amendment dispute, wire encoding summary | — |
+| OQ-35 | Design gap | Markers — electronic commitment coins | **✓ DRAFT-SPEC 2026-05-17** — all OQ-Ms resolved; P2P software Marker (Option E) added; wire encoding summary | — |
+| OQ-36 | Design gap | Attachment image quality tiers — progressive delivery, inline ThumbHash, 2G-viable Tier 1 | Medium | No — needed before camera integration |
+| OQ-37 | Design gap | Project association — financial items max 1 project; structured project UID linking post-MVP | Medium | No — MVP uses tag field convention |
+| OQ-38 | Security | Chain UID exposure in URL suffix — Option C (accept) for MVP, hashed ref post-MVP | Low | No |
+| OQ-39 | Design concept | Data Sync Bundle — sequenced dependency hydration before record delivery | **Resolved — Option C** | — |
+| OQ-40 | Research session | C-TRIG extended condition registry — escape byte design, condition namespaces, enforceable agreement complexity | **Research complete** — OQ-40c resolved (Option B: halt+re-trigger); OQ-40e resolved (Option C: no gates); OQ-40f resolved (Option C: low-nibble threshold). OQ-40a, OQ-40b, OQ-40d still open. See C-TRIG-EXTENDED-CONDITIONS.md | No — C-TRIG is long-term |
+| OQ-41 | Design gap | C-TRIG evaluator architecture — stack machine, opcode table, COMPARE_AMT, VERSION escape, BRANCH semantics | **✓ DRAFT-SPEC 2026-05-17** — CTRIG-EVALUATOR-DESIGN.md; all opcodes specified; §7 pseudocode complete | — |
+
 **Hard blockers before any codec.js work starts:** OQ-1 ✓, OQ-2 ✓, OQ-5 ✓  
 **Needed before first real record encodes correctly:** OQ-3 ✓, OQ-4 ✓, OQ-6 ✓  
-**Deferred / active design:** OQ-7 (DOMAIN=11, active design pending)  
+**Resolved:** OQ-7 ✓ (DOMAIN=11 hybrid — always-on, deterministic matching table, amendment path, DOMAIN=10 integration-only)  
 **Resolved non-blockers:** OQ-8 ✓, OQ-9 ✓, OQ-10 ✓, OQ-11 ✓, OQ-12 ✓, OQ-13 ✓  
-**Needed before `1pt` / template features:** OQ-15 ✓, OQ-16 ✓, OQ-18 ✓, OQ-19 ✓  
-**Needed before form builder:** OQ-17 ✓  
+**Template system fully resolved:** OQ-15 ✓, OQ-16 ✓, OQ-17 ✓, OQ-18 ✓, OQ-19 ✓ — see TEMPLATE-SYSTEM-DESIGN.md  
 **Needed before presentation records:** OQ-20 ✓, OQ-21–OQ-25 (in progress)  
 **TRIG spec complete:** OQ-32 ✓ — implement when `1pb`/`1pf` shell begins  
 **Post-MVP / advanced:** OQ-26, OQ-27, OQ-28, OQ-30, OQ-31, OQ-33  

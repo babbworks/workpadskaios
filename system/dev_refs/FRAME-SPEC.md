@@ -1,7 +1,9 @@
 # pads-v1 Frame Specification
 
-**Status:** v0.1 draft — 2026-05-15  
-**Decisions:** D1–D24 (see CODEC-EVOLUTION.md for full log)  
+**Status:** v1.0.1 — 2026-05-18  
+**Decisions:** D1–D24 + CODEC-1/2/3; all §16 items resolved (see CODEC-EVOLUTION.md)  
+**Includes:** DOMAIN=11 hybrid mode (§17); TEMPLATE-SYSTEM-DESIGN.md GPS+preamble updates; fin_control BILLED flag; CTRIG VERSION opcode SUPPORTED_FEATURES  
+**Corrections (v1.0.1):** Profile A split into A-text (42B) and A-compact (33B) — prior 32B figure omitted meta2 byte. Profiles B/C/D meta2 DOMAIN field corrected: DOMAIN=01 sits at bits 3-2 (0x04), not bits 2-1 (0x02); hex values updated (0x42→0x44, 0x52→0x54). Profile D meta1 corrected: was 0xC8 (EXT_TEMPLATE=1, wrong), now 0x88 (EXT_TEMPLATE=0, Financial). Benchmark row updated: 42B→33B, saving 9B (not 10B).  
 **Depends on:** STANDARD-FIELDS.md, ROLE-CODEBOOK.md  
 **Replaces:** `1eg/` codec (codebook-c-kaios, current live)
 
@@ -12,7 +14,7 @@
 Every record is a binary byte sequence. The sequence is deflate-compressed, then base64url-encoded (no padding), then embedded in a URL fragment.
 
 **URL scheme:** `workpads.me/p#<codebook-tag>/<base64url-deflated-frame>`  
-**Codebook tag:** TBD (new tag distinct from `1eg` and `1bg`; signals pads-v1 format to receiver)  
+**Codebook tag:** `1pa` — pads v1, package a. Resolved OQ-1.  
 **Byte order:** big-endian for all multi-byte integers  
 **Presence:** bytes present only if their condition is met; conditions chain (absent meta2 makes all meta2-gated bytes absent too)
 
@@ -67,10 +69,10 @@ EXT_SIGNAL codes (EXT_TEMPLATE=1):
   bit 7: SELF_DESCRIBING  0=template-dependent blocks (compact, semantic security)
                           1=self-describing blocks (1-byte field-name index per data block)
   bit 6: COMPACT_TIME     0=date/time as text ([u16 len][UTF-8 ISO string])
-                          1=date as uint16 days since 2020-01-01; time as uint16 minutes since midnight
-  bit 5: (reserved)       must be 0
+                          1=date as uint16 days since 2000-01-01; time as uint16 minutes since midnight
+  bit 5: HAS_TRIG_BLOCK   1=TRIG bytecode block present (top-level, after participants block)
   bit 4: PARTICIPANTS     1=participants block follows data blocks
-  bits 3-2: DOMAIN        00=none (no financial), 01=simple (I>O), 10=standard (BitLedger), 11=reserved
+  bits 3-2: DOMAIN        00=none (no financial), 01=simple (I>O perspective), 10=standard (BitLedger Account Pair), 11=hybrid (I>O + Account Pair — same setup/transaction bytes as 01, plus account_pair_byte; see §17)
   bit 1: DRAFT            1=working draft, not finalised
   bit 0: RESTRICT_FORWARD 1=record must not be forwarded by recipient
 
@@ -80,7 +82,8 @@ EXT_SIGNAL codes (EXT_TEMPLATE=1):
 
   bits 7-5: DECIMAL_POS   decimal places in all amount fields
                           000=0 (whole units)  001=1  010=2 (pence/cents)
-                          011=3  100=4  101=5  110=6 (crypto)  111=extension
+                          011=3  100=4  101=5  110=6 (crypto)
+                          111=flat uint24 mode (amounts are raw smallest-unit integers; no scaling)
   bits 4-3: CURRENCY      00=sender home currency (zero overhead for local records)
                           01=first codebook common cross-currency
                           10=second codebook common cross-currency
@@ -96,8 +99,8 @@ EXT_SIGNAL codes (EXT_TEMPLATE=1):
 [currency_ext]            1 byte — if CURRENCY=11
 
   uint8 currency code (0x00–0xFF): 256 currency slots
-  0x00–0x7F: ISO 4217 aligned (GBP=0x01, USD=0x02, EUR=0x03, NGN=0x20, KES=0x21, ...)
-  0x80–0xEF: regional and digital currencies
+  0x01–0x1F: Major global and reserve currencies; 0x20–0x4F: Africa region; 0x50–0x6F: Asia-Pacific; 0x70–0x8F: Americas; 0x90–0xAF: Europe (non-EUR); 0xB0–0xCF: Middle East and Central Asia; 0xD0–0xEF: Digital/crypto and special; 0xF0–0xFE: reserved
+  Full code table: see OQ-3 in OPEN-QUESTIONS.md. OQ-3 is authoritative.
   0xFF: reserved
 
 ───────────────────────────────────────────────────────────────────
@@ -132,6 +135,16 @@ EXT_SIGNAL codes (EXT_TEMPLATE=1):
     where rate = customer_amount >> SPLIT_POINT_bits
           qty  = customer_amount & ((1 << SPLIT_POINT_bits) - 1)
     (SPLIT_POINT_bits = 8 when stored=0; = stored value otherwise)
+
+**QTY_TIME encoding (time-unit quantities):**
+When qty_unit (FLAGS3 bit 2) indicates a time unit (hours, labour-hours, etc.), qty is encoded as 2 bytes instead of via QTY_COMPACT:
+```
+  Byte 1: hours         uint8 (0–255)
+  Byte 2: minutes_index uint8 (0–11; multiply × 5 for actual minutes: 0, 5, 10 … 55)
+```
+Max: 255h 55min. UI presents 15-min and 10-min increment shortcuts; wire always stores to 5-min precision.
+Decoder selects QTY_TIME when qty_unit is a time unit; QTY_COMPACT applies for all other unit types.
+ROUNDING bit 1-0 in transaction_byte: 10=round up to next 5-min, 11=round down; 00=exact.
 
 ───────────────────────────────────────────────────────────────────
 
@@ -193,9 +206,9 @@ EXT_SIGNAL codes (EXT_TEMPLATE=1):
 Data blocks follow field_flags (and field_flags3 if present), in ascending bit-order of their field flag.
 
 Encoding by field type:
-  text (standard):  [uint16 length LE][UTF-8 bytes]  — bits 0-3, 7-11, FLAGS3 bits 4-6
+  text (standard):  [uint16 length BE][UTF-8 bytes]  — bits 0-3, 7-11, FLAGS3 bits 4-6
   text (compact):   [uint8 length][UTF-8 bytes]       — bits 13, FLAGS3 bits 0-2
-  date:             uint16 (COMPACT_TIME=1: days since 2020-01-01; COMPACT_TIME=0: see text)
+  date:             uint16 (COMPACT_TIME=1: days since 2000-01-01; COMPACT_TIME=0: see text)
   time:             uint16 (COMPACT_TIME=1: minutes since midnight; COMPACT_TIME=0: see text)
   amount:           uint24 (financial block — see below)
 
@@ -292,10 +305,16 @@ Per participant (repeated count times):
   bit 4: HAS_ALT_ID       1=alt_id block follows (for no-phone users)
   bit 3: HAS_PHONE        1=phone field follows
   bit 2: HAS_EMAIL        1=email field follows
-  bit 1: HAS_ROLE_TEXT    1=free-text role label (when ROLE_TYPE=11 and no role_code byte)
+  bit 1: HAS_ROLE_TEXT / HAS_TRADING_NAME
+                          When ROLE_TYPE=11: 1=free-text role label follows (no role_code byte)
+                          When ROLE_TYPE≠11: 1=trading_name field follows (sole trader or org name distinct from personal name)
   bit 0: IS_ORG           1=company/organisation  0=individual
 
-[name]                    [uint16 len][UTF-8] — always present
+[name]                    [uint16 len][UTF-8] — always present (personal name, or primary display name)
+
+[trading_name]            [uint16 len][UTF-8] — if HAS_TRADING_NAME=1 (ROLE_TYPE≠11)
+                          Trading name for sole traders; registered name for companies when different from common name.
+                          Shell display: template controls which name leads; default = trading_name when present.
 
 [phone]                   [uint16 len][UTF-8] — if HAS_PHONE=1
 
@@ -349,19 +368,34 @@ byte = (DIRECTION << 7) | (TIME << 6) | (EFFECT << 5) | (SUBTYPE << 3) | (QTY_SP
 Named configurations for common record types, with exact byte counts before compression.
 
 ### Profile A — Minimal service note (no financial)
+
+Two valid encodings — text (no meta2, smaller frame when only one date field) vs compact (meta2 required):
+
+**Profile A-text (42B raw, COMPACT_TIME=0):**
 ```
 Scenario: "Attended site, checked boiler. No charge."
 Fields: job text (25 chars), date
 
-meta1:         1B  (0b00000000 — BASE=000, no META2, no ACK, no CHAIN)
+meta1:         1B  (0b00000000 — BASE=000, META2_PRESENT=0, no ACK, no CHAIN)
 field_flags:   2B  (bits 0+2 set: job + date)
 job block:     2+25 = 27B
-date block:    2B   (COMPACT_TIME=0: ISO date [u16+10chars]=12B; or COMPACT_TIME=1: u16=2B)
+date block:    2+10 = 12B  (ISO date string "2026-05-17")
 
-Total (COMPACT_TIME=1): 1+2+27+2     = 32B raw
-Total (COMPACT_TIME=0): 1+2+27+12    = 42B raw
+Total: 1+2+27+12 = 42B raw
 ```
-Note: without meta2, COMPACT_TIME cannot be signalled → date must be text → 42B. Adding meta2 (1B) to signal COMPACT_TIME=1 saves 10B on the date but costs 1B for meta2 → net 9B saving if date present.
+
+**Profile A-compact (33B raw, COMPACT_TIME=1 — implementation target):**
+```
+meta1:         1B  (0b10000000 = 0x80 — META2_PRESENT=1, BASE=000)
+meta2:         1B  (0b01000000 = 0x40 — COMPACT_TIME=1)
+field_flags:   2B  (bits 0+2 set: job + date)
+job block:     2+25 = 27B
+date block:    2B   (uint16 days since 2000-01-01)
+
+Total: 1+1+2+27+2 = 33B raw
+```
+
+Note: Adding meta2 (1B) to signal COMPACT_TIME=1 saves 10B on the date field but costs 1B for meta2 → net 9B saving per date field. For records with multiple dates the saving compounds. Profile A-compact (33B) is the standard implementation target.
 
 ### Profile B — Simple payment received
 ```
@@ -371,7 +405,7 @@ Fields: job, customer, date (compact), financial (payment received, customer_amo
 
 ```
 meta1:              1B   0b10001000 = 0x88 (META2=1, EXT=0, BASE=001/Financial, no ACK/CHAIN/RECIP)
-meta2:              1B   0b01000010 = 0x42 (SELF_DESC=0, COMPACT_TIME=1, res=0, PART=0, DOMAIN=01, DRAFT=0, RFWD=0)
+meta2:              1B   0b01000100 = 0x44 (SELF_DESC=0, COMPACT_TIME=1, HAS_TRIG=0, PART=0, DOMAIN=01 bits3-2=01, DRAFT=0, RFWD=0)
 setup_byte:         1B   0b01000000 = 0x40 (DECIMAL_POS=010/2, CURRENCY=00/home, TAX=00, SF=0)
 transaction_byte:   1B   0b00000000 = 0x00 (I<I settled, sub=00 payment, QTY=0, ROUNDING=00 exact)
 field_flags:        2B   0x1007      (bits 0,1,2,12: job+customer+date+financial)
@@ -393,7 +427,7 @@ Fields: job, customer, date, financial (I>I future, qty split compact)
 
 ```
 meta1:              1B   0x88 (same as B)
-meta2:              1B   0x42 (same as B)
+meta2:              1B   0x44 (same as B)
 setup_byte:         1B   0b01000001 = 0x41 (DECIMAL_POS=2, CURRENCY=home, TAX=none, SF_PRESENT=1)
 sf_byte:            1B   0b00001000 = 0x08 (SF=000/×1, COMPOUND=0, QTY_COMPACT=1, SPLIT_POINT=000/default-8-qty-bits)
 transaction_byte:   1B   0b01000100 = 0x44 (I>I future: DIR=0,TIME=1,EFF=0, sub=00, QTY_SPLIT=1, ROUNDING=00)
@@ -435,8 +469,8 @@ Fields: job, customer, date, financial, participants (2 people)
 ```
 
 ```
-meta1:              1B   0b11001000 = 0xC8 (META2=1, EXT=0, BASE=001, no ACK/CHAIN; RECIP=0)
-meta2:              1B   0b01010010 = 0x52 (COMPACT_TIME=1, PARTICIPANTS=1, DOMAIN=01)
+meta1:              1B   0b10001000 = 0x88 (META2=1, EXT=0, BASE=001/Financial, no ACK/CHAIN/RECIP)
+meta2:              1B   0b01010100 = 0x54 (COMPACT_TIME=1, PARTICIPANTS=1, DOMAIN=01 bits3-2=01)
 setup_byte:         1B   0x40
 transaction_byte:   1B   0x00 (payment received, exact)
 field_flags:        2B   0x1007
@@ -480,7 +514,7 @@ Benchmark records compared raw (before deflate+base64url):
 | Record | 1eg/ raw | pads-v1 raw | Saving | Notes |
 |--------|----------|-------------|--------|-------|
 | Simple payment (Profile B) | 50B | 36B | 14B (28%) | Date: ISO string→uint16 saves 10B; amount: UTF-8→uint24 saves 5B |
-| Service note no financial | 42B | 32B | 10B (24%) | Date encoding + no enum bytes |
+| Service note no financial | 42B | 33B | 9B (21%) | Date: ISO→uint16 saves 10B; meta2 costs 1B (net 9B). Profile A-compact. |
 | T&M invoice, integer qty, compact | 55B | 37B | 18B (33%) | QTY_COMPACT packs price+qty in 3B vs 1eg/ total-only encoding |
 | Record with 2 participants | 85B | 76B | 9B (11%) | Participants overhead similar; header savings still apply |
 
@@ -498,43 +532,9 @@ Benchmark records compared raw (before deflate+base64url):
 
 ---
 
-## 6. Migration Path: 1eg/ → pads-v1
+## 6. No Migration Required
 
-### Breaking change summary
-- Wire format incompatible at byte 1: 1eg/ starts with template byte `0x02`; pads-v1 starts with meta1 byte (valid range different)
-- URL scheme: `#1eg/<payload>` vs `#<new-tag>/<payload>` — receiver identifies format by URL fragment prefix
-- All existing 1eg/ records remain valid; they just need the legacy decoder
-
-### Migration strategy
-
-**Phase 1 — Dual codec (implementation)**
-- Add `decode_pads1(frame)` to `codec.js` alongside existing `decode_1eg(frame)`
-- New records encoded as pads-v1 immediately
-- Incoming URLs: inspect fragment prefix, route to appropriate decoder
-- Estimated codec.js change: +300–400 lines for new encoder/decoder; legacy decoder unchanged
-
-**Phase 2 — Gradual re-encoding**
-- When a 1eg/ record is opened in the app, offer "Update record" to re-encode as pads-v1
-- On chain link: re-encode parent when creating child if parent is 1eg/
-- Shared URLs: receiver app detects 1eg/ and offers upgrade on receipt
-
-**Phase 3 — Legacy sunset (12+ months)**
-- Remove `decode_1eg` from codec.js when usage telemetry (or a defined cutover date) confirms negligible legacy traffic
-- Keep legacy decoder in archival/export-only path for permanent historical access
-
-### Field mapping (1eg/ → pads-v1)
-
-| 1eg/ field | pads-v1 field | Notes |
-|---|---|---|
-| template byte `0x02` | meta1 BASE_TEMPLATE | Enum→structured type |
-| flags byte[0] bits 0-11 | field_flags bits 0-11 | Direct mapping |
-| flags byte[2] extended | field_flags3 / participants | Expand as needed |
-| `record_type` enum | transaction_byte DIRECTION+TIME+EFFECT | I>O notation replaces enum |
-| `vat` enum | setup_byte TAX_CODE | 0→00, 1→01, 2→10 |
-| `currency` enum | setup_byte CURRENCY + currency_ext | Home→00, others→extended |
-| amount UTF-8 string | customer_amount uint24 | Parse string, multiply by 10^D |
-| date ISO string | date field (COMPACT_TIME=1 → uint16) | Days since 2020-01-01 |
-| participants (bit 19) | participants block | Part_flags + structured fields |
+The app has not been publicly released (private demo only). The `1eg/` codec is superseded entirely by pads-v1 (`1pa`). No dual-decoder, no backward-compatibility path, no migration. All pre-existing records are test data.
 
 ---
 
@@ -618,9 +618,9 @@ State Commit records are point-in-time snapshots. They carry no transaction byte
 [state_commit]            1 byte — always present when BASE_TEMPLATE=101
 
   bits 7-6: COMMIT_TYPE   00=job close (job finalised; balance outstanding shown)
-                          01=pay period close (pay period finalised for a worker)
-                          10=period summary (income/expense/net for a date range)
-                          11=annual aggregate (full-year financial summary)
+                          01=payment confirmed (settlement of a specific amount received/made)
+                          10=terms agreed (bilateral acceptance of a quoted/proposed record)
+                          11=reserved (must be 0; disputes handled via Amendment + DISPUTE_FLAG)
 
   bits 5-4: PERIOD_TYPE   (meaningful for COMMIT_TYPE=10/11)
                           00=calendar month    01=tax week
@@ -634,13 +634,45 @@ State Commit records are point-in-time snapshots. They carry no transaction byte
 **Financial block in State Commit records:**
 - `setup_byte` present (currency/decimal context)
 - `transaction_byte` absent (no I>O direction on a snapshot)
-- For COMMIT_TYPE=01 (pay period close): `worker_amount` = net pay for the period; `customer_amount` = gross
-- For COMMIT_TYPE=10/11 (period summary): COMPOUND_VALUE=1; compound lines carry category totals (income, expense, COGS, net)
+- State Commits carry a **summary-only** financial block — key confirmation data, not full line detail
+
+**State Commit financial summary block (when financial context present):**
+```
+[sc_fin_summary]          variable
+
+  total_amount    uint24          — the confirmed total (mandatory when financial)
+  line_count      uint8           — number of line items being confirmed (for display: "3 items")
+
+  [optional — if FLAGS indicate present:]
+  tax_total       uint24          — confirmed tax amount
+  compound_summary  per-line:     — compact display summary (not full compound block)
+    [description]   [u8 len][UTF-8]  max 40B
+    [amount]        uint24
+    (repeated line_count times)
+  fingerprint     6 bytes         — SHA-256(original_financial_bytes)[0:6]; tamper-evident seal
+                                    verifiable offline against the original record
+```
+
+Level A (default): total_amount + line_count only (4 bytes). Level B: adds fingerprint (10 bytes total). Extensions C/D reserved.
+
+**Guest viewer confirmation signature (when receiver has no Workpads account):**
+```
+  device_fingerprint  6 bytes     — SHA-256(user_agent + screen + timezone + language)[0:6]
+  confirm_timestamp   uint16      — COMPACT_TIME (2 bytes, minutes precision)
+  confirm_flag        1 bit       — set when receiver taps explicit "I confirm" action
+  identity_anchor     9 bytes     — optional: [1B type: 01=phone 02=email] + SHA-256(value)[0:8]
+                                    receiver may leave blank; included only if provided
+```
+
+Total guest sig: 8B mandatory + 9B optional.
+
+**Per-period records (COMMIT_TYPE=00/01):** `setup_byte` present; amounts in summary block.
+**Period summary records (not a COMMIT_TYPE — use date_start + date_end with compound lines):** COMPOUND_VALUE=1; compound lines carry category totals (income, expense, COGS, net).
 
 **Date range for period records:**
 - `date` field (field_flags bit 2): period start date
-- `date_end` field (field_flags3 bit 3*): period end date
-- *Note: field_flags3 bit 3 currently assigned `expiry_date`; resolution pending — swap expiry_date to FLAGS4, reassign bit 3 to date_end
+- `date_end` field (field_flags3 bit 3): period end date
+- Note: `expiry_date` moved to field_flags4 bit 1 (financial template). field_flags3 bit 3 = `date_end`. Resolved.
 
 ---
 
@@ -681,6 +713,24 @@ Unchanged fields are absent. The receiver reconstructs the amended record by ove
 - `ACK_REQUEST=1` in the parent record signals that the sender expects either confirmation or an amendment in reply
 - Multiple amendments on the same parent are ordered by chain depth; each subsequent amendment chains from the previous
 
+**Parent UID embedding (optional inline, mandatory for Markers):**
+```
+[parent_uid]              8 bytes — embedded parent reference in frame body
+                          = SHA-256(parent_frame_bytes)[0:8]
+                          Mandatory when: writing to a Marker (#1pm/), or BASE_TEMPLATE=110 + DOMAIN≥01 (financial amendment)
+                          Optional otherwise: CHAIN=1 + &c= URL suffix is sufficient for web-shared amendments
+                          Flag: HAS_PARENT_UID in amendment_flags byte (extension of amendment_header — see below)
+```
+
+```
+[amendment_flags]         1 byte — extension byte, present when CHANGED_MASK_3_PRESENT=0 and byte 2 bit 14=1
+  bit 7: HAS_PARENT_UID   1=8-byte parent_uid follows after changed masks
+  bit 6: DISPUTE_LINK     1=this amendment is a dispute record; links into agreement trail via parent_uid
+  bits 5-0: reserved
+```
+
+**Disputes:** Disputes are Amendment records with DISPUTE_LINK=1 + HAS_PARENT_UID=1. They link into the agreement creation trail without polluting the State Commit sequence. Shell shows dispute badge on the parent record when a DISPUTE_LINK amendment is detected in the chain. See AGREEMENTS-DESIGN.md §3.
+
 ---
 
 ## 11. Presentation Record Blocks (BASE_TEMPLATE=any, #1pb/ URLs)
@@ -703,7 +753,7 @@ Present when the record is shared as a `#1pb/` presentation URL.
     bits 5-4: DATA_SOURCE     00=inline (all data in this record)
                               01=contact-resident (payload is contact ID; receiver fills from contacts)
                               10=activity profile (data from sender's activity profile)
-                              11=hybrid (some inline, some resolved by receiver)
+                              11=anonymous/stealth — no sender identity in payload; no reply routing address; SUBMIT_ACTION=11 required if form present; shell shows placeholder text only (OQ-24; see ANON-MODE-DESIGN.md)
 
     bit 3: SHOW_PRICE         1=prices displayed in menu/list lines
     bit 2: SHOW_CONTACT       1=phone/email shown in card view (RECIPIENT_TYPE=0 only)
@@ -716,8 +766,11 @@ Present when the record is shared as a `#1pb/` presentation URL.
   [display_flags2]         1 byte — if DISPLAY_FLAGS2=1
     bits 7-5: FONT_SIZE       000=default  001=large  010=compact
     bits 4-3: LAYOUT_COLS     00=1-col  01=2-col  10=auto  11=reserved
-    bits 2-0: reserved        must be 0
+    bit 2: (reserved)         must be 0 — was HAS_TRIG; TRIG moved to meta2 bit 5 (OQ-32c)
+    bits 1-0: reserved        must be 0
 ```
+
+### 11.3 TRIG Block (moved — see §13)
 
 ### 11.2 Form Schema Block
 
@@ -730,7 +783,7 @@ Present when `display_schema` DISPLAY_TYPE=02 or 03, enabling collect-and-reply 
     bits 7-6: SUBMIT_ACTION   00=reply record (receiver submits as a new pads-v1 record)
                               01=web endpoint (URL in form payload)
                               10=email (address in form payload)
-                              11=reserved
+                              11=anonymous pickup — submission held server-side; sender retrieves via blind pickup code derived from master_secret + form UID; no routing address in payload; requires DATA_SOURCE=11 (OQ-24)
     bits 5-4: REPLY_TEMPLATE  BASE_TEMPLATE of the expected reply record
                               00=contact card  01=financial  10=service note  11=custom
     bit 3: ALLOW_EDIT         1=receiver may edit their own submitted fields post-submit
@@ -757,15 +810,61 @@ Present when `display_schema` DISPLAY_TYPE=02 or 03, enabling collect-and-reply 
 
 ---
 
+### 11.4 Financial Presentation Records (`#1pf/` tag)
+
+Financial presentation records use the `#1pf/` URL tag rather than `#1pb/`. They carry a display_schema block (and optionally a TRIG block and form_schema) oriented toward financial views — invoice display, account statements, pay period summaries.
+
+Differences from `#1pb/` public billboard:
+- Share sheet requires explicit user confirmation before generating a `#1pf/` URL
+- App warns when sharing to general-purpose channels (WhatsApp groups, SMS broadcasts)
+- `#1pf/` URLs should be combined with `#1ps/` or `#1pt/` security for any record containing actual financial amounts
+- Not for public circulation — intended for named recipients (customer invoice link, worker pay summary)
+
+The wire frame for `#1pf/` records is identical to `#1pb/` — same display_schema, same form_schema, same TRIG block. The tag itself is the signal to the shell and the share sheet that extra safety measures apply.
+
+---
+
+## 13. TRIG Block (meta2 HAS_TRIG_BLOCK=1)
+
+Present when meta2 bit 5 (`HAS_TRIG_BLOCK`) = 1. Top-level block, appears after the participants block (or after the financial block if no participants block present), before the security wrapper.
+
+TRIG is a 1–20 byte stack machine program controlling conditional rendering — who sees what, in which display mode, with which CSS/JS module loaded. Evaluated client-side only. The fragment is never sent to the server; TRIG evaluation is entirely local.
+
+```
+[trig_block]           variable — if HAS_TRIG_BLOCK=1
+
+  [trig_len]           1 byte — uint8, length of TRIG program in bytes (0–20)
+  [trig_bytes]         N bytes — TRIG v1 bytecode program (N = trig_len)
+
+  trig_len=0: block present but program is empty; shell defaults to SHOW_ALWAYS NATIVE
+  trig_len=1: single pattern token (high nibble = 0x0; see OQ-32 pattern token table)
+  trig_len 2–20: full bytecode program; byte 0 is TRIG header byte
+  trig_len > 20: spec violation; shell renders BLANK
+```
+
+TRIG can be carried by any record type (not only presentation records). A chain record or State Commit with HAS_TRIG_BLOCK=1 can control which party sees the chain state details.
+
+**Full TRIG specification:** OQ-32 in OPEN-QUESTIONS.md and TRIG-DESIGN.md.
+
+---
+
 ## 12. Security Wrapper (OQ-14)
 
 The security wrapper sits outside the pads-v1 frame. It is applied after the frame is assembled and before base64url encoding. The URL tag signals the security level.
 
-**URL tags by security level:**
-- `#1pv/<payload>` — plaintext (no wrapper; default for customer-facing records)
-- `#1ps/<payload>` — full security wrapper (private/colleague records, cost data)
-- `#1ph/<payload>` — partial wrapper (field-level scramble only; no AES)
-- `#1pt/<payload>` — template-keyed (display schema keyed; payload decoded with known template)
+**URL tag dispatch table — all pads-v1 tags:**
+
+| Tag | Name | Purpose | JS permitted? |
+|-----|------|---------|---------------|
+| `#1pa/` | Plain record | Standard records: financial, service, contact. No presentation wrapper. | No |
+| `#1pb/` | Public billboard | Non-financial presentation: business cards, service menus, contact forms. Public circulation. Never carries financial data or executable logic. | No |
+| `#1pf/` | Financial presentation | Financial views: invoice display, statements, pay summaries. Extra share-sheet safety. Not for public circulation. Combine with `#1ps/` or `#1pt/` for security. | Yes (with `#1ps/`/`#1pt/`) |
+| `#1ps/` | Full scramble | AES-CTR encryption + field scramble. Private/colleague records, cost data, pay records. | Yes |
+| `#1ph/` | Partial scramble | Header bytes unencrypted (meta1, meta2, setup_byte, transaction_byte); field data and financial block encrypted. Receiver sees record type before entering code. | No |
+| `#1pt/` | Template-keyed | Template content is encryption key. Template ID advertised plainly; meaningless without template content. | Yes (if template has `allow_js: true`) |
+| `#l/` | List share | Standalone option list for form builder multi-select fields. Not a record — list content only. | No |
+
+**Canonical reference for this table:** See also TAG-REFERENCE.md (permanent development and standard reference).
 
 ### 12.1 Five-Layer Security Stack
 
@@ -784,34 +883,88 @@ Layers applied in order (outermost first in URL):
 - Layer tag: `SCRAMBLE=1` in preamble byte
 
 **Layer 3 — AES-CTR payload encryption:**
-- Full frame encrypted after deflate; 128-bit key
-- IV = record UID hash (first 16 bytes)
-- Key = shared secret derived from sender+receiver identity pair
+- Full frame encrypted after deflate + scramble; 128-bit key
+- Key = cipher_key = SHA-256(passphrase || salt)[0:16]
+- IV = master[0:16] (same bytes as cipher_key; per-record freshness guaranteed by random salt)
 - Layer tag: `AES=1` in preamble byte
 
 **Layer 4 — Receiver commitment HMAC:**
-- 8-byte HMAC-SHA256 truncated tag appended to payload
-- Commits to receiver identity: only the named receiver can verify
+- 8-byte HMAC-SHA256 truncated tag embedded INSIDE the encrypted envelope (last 8 bytes before AES-CTR is applied)
+- Verified by receiver after decryption; wrong key → HMAC mismatch → reject
+- Commits to receiver phone hash: only the named receiver can verify
 - Layer tag: `HMAC=1` in preamble byte; requires RECIPIENT_TYPE=1 in meta1
 
-**Layer 5 — Preamble byte** (1 byte, prepended before base64url):
+**Layer 5 — Preamble byte** (1 byte, part of base64url payload after salt):
 ```
   bit 7: SCRAMBLE         1=field scramble applied
   bit 6: AES              1=AES-CTR encryption applied
-  bit 5: HMAC             1=receiver commitment HMAC appended
+  bit 5: HMAC             1=receiver commitment HMAC present (last 8B inside envelope)
   bit 4: SEED_POISON      1=deflate seed poisoning applied
-  bits 3-0: KEY_HINT      lower 4 bits of key ID (helps receiver select decryption key)
+  bit 3: HKDF_KEY         1=HKDF-derived key (domain-separated); 0=direct SHA-256 of template bytes
+                          (meaningful for #1pt/ template-keyed records; ignored for #1ps/#1ph)
+  bits 2-0: KEY_HINT      lower 3 bits of cipher_key[0] (helps receiver select passphrase from key ring)
 ```
 
-**Wrapper format (assembled):**
+**URL structure:**
 ```
-[preamble_byte][AES-CTR([seed-poisoned-deflate([frame])])][HMAC_tag?]
+workpads.me/p#1ps/<b64url(salt_4B)>.<b64url(preamble_byte + encrypted_inner)>
 ```
-All then base64url-encoded as the URL fragment payload.
+The salt (4 random bytes, base64url = 6 chars) precedes the `.` separator. It is a derivation nonce, not a secret.
 
-### 12.2 Private Record Convention
+**Key derivation:**
+```
+master       = SHA-256(passphrase || salt)   [32 bytes]
+cipher_key   = master[0:16]
+scramble_seed = master[16:32]
+iv           = master[0:16]   (same as cipher_key; safe because salt is fresh per record)
+```
+
+**Wrapper format (innermost first):**
+```
+inner = AES-CTR(
+  cipher_key, iv,
+  plaintext = [field_scramble([deflate_seeded([frame])])][hmac_tag_8B?]
+)
+URL payload = [preamble_byte][inner]
+```
+
+**Full encode path:**
+```
+frame → deflate(seed=scramble_seed[0:4]) → field_scramble(seed=scramble_seed[4:8])
+      → [optional: append hmac_tag_8B] → AES-CTR(cipher_key, iv)
+      → prepend preamble_byte → base64url → URL fragment after salt.
+```
+
+**Decode path:**
+```
+1. Split URL fragment on `.` → extract salt (first segment)
+2. Derive master, cipher_key, scramble_seed from passphrase + salt
+3. Check KEY_HINT (preamble bits 3-0) against cipher_key[0] lower nibble — abort if mismatch
+4. AES-CTR decrypt
+5. If HMAC=1: extract last 8 bytes; verify HMAC-SHA256(cipher_key||receiver_phone_hash, inner)[0:8]
+6. Un-field-scramble using scramble_seed[4:8]
+7. Inflate with seed=scramble_seed[0:4]
+8. Parse pads-v1 frame
+```
+
+### 12.2 Partial Scramble (`#1ph/`) Layout
+
+The first bytes of the encoded fragment are in clear — only the field data is encrypted:
+
+```
+URL: workpads.me/p#1ph/<b64url(salt)>.<b64url(preamble + clear_header + encrypted_inner)>
+
+clear_header = meta1[1B] + meta2[0-1B] + setup_byte[0-1B] + transaction_byte[0-1B]
+encrypted_inner = AES-CTR(cipher_key, iv, [field_scramble([deflate_seeded([field_bytes])])])
+```
+
+Receiver sees record type (template ID) and DOMAIN before entering passphrase. `#1ph/` does not carry an HMAC layer (HMAC=0 in preamble).
+
+### 12.3 Private Record Convention
 
 Records with `worker_amount` or `EXPENSE_CATEGORY=01/10` (cost data, internal) should always use at minimum `#1ps/` (full wrapper) when shared. The caller (app share sheet) enforces this — the codec itself does not refuse to encode without a wrapper.
+
+**Full security specification:** SECURITY-DESIGN.md (draft-spec status, 2026-05-17).
 
 ---
 
@@ -819,12 +972,7 @@ Records with `worker_amount` or `EXPENSE_CATEGORY=01/10` (cost data, internal) s
 
 The `alt_id` block provides an alternative identifier for participants without a phone number — common in low-connectivity markets (Africa, South/Southeast Asia).
 
-**Current constraint:** All 8 bits of `part_flags` are used; `HAS_ALT_ID` requires a 9th bit.  
-**Resolution options (pending OQ-31 decision):**
-- Option A: Pack ROLE_TYPE into 2 bits (drop extended role from quick-select; 6 roles fit in 2 bits: Customer, Worker, Supplier, Subcontractor, Employee, Agent — Authority drops to role_code path)
-- Option B: Extend to 2-byte `part_flags` when a new high-bit escape is encountered
-
-Until resolved, alt_id is treated as post-MVP. The block definition below assumes Option A (ROLE_TYPE=2 bits, freeing 1 bit for HAS_ALT_ID).
+**Resolved (OQ-31, Option A):** ROLE_TYPE packed into 2 bits (bits 6–5 of part_flags), freeing bit 4 for HAS_ALT_ID. The part_flags layout in §2 reflects this. See ROLE-CODEBOOK.md for the updated 2-bit quick-select table and role_code extended path.
 
 **Modified part_flags (Option A, 2-bit ROLE_TYPE):**
 ```
@@ -861,17 +1009,24 @@ Until resolved, alt_id is treated as post-MVP. The block definition below assume
   Bits 0–7 are template-defined. The decoder must know the active template to interpret them.
 
   Contact/entity template (BASE_TEMPLATE=011) assignments:
-    bit 0: vcard_org        organisation name (separate from name field)    [u16 len][UTF-8]
-    bit 1: vcard_title      job title / role label                          [u8 len][UTF-8]
-    bit 2: vcard_address    postal address                                  [u16 len][UTF-8]
-    bit 3: vcard_website    website URL                                     [u16 len][UTF-8]
-    bit 4: vcard_note       contact note                                    [u16 len][UTF-8]
-    bits 5-7: reserved      must be 0 (for Contact template)
+    bit 0: website          website URL                                     [u16 len][UTF-8]
+    bit 1: social_handle    @handle or profile link                         [u8 len][UTF-8]
+    bit 2: business_hours   opening hours (text; structured block post-MVP) [u16 len][UTF-8]
+    bit 3: category         trade/service category                          1 byte enum (see ROLE-CODEBOOK.md §3)
+    bit 4: alt_phone        second phone number                             [u16 len][UTF-8] E164
+    bit 5: meeting_location preferred meeting location (address or area)    [u16 len][UTF-8]
+    bit 6: reserved         must be 0
+    bit 7: FLAGS5_PRESENT   1=field_flags5 byte follows (future extension)
 
   Financial record template assignments (BASE_TEMPLATE=001):
     bit 0: service_ref   back-reference to service template that generated this record   [u8 len][UTF-8]
     bit 1: expiry_date   record/offer expiry date (moved from FLAGS3 bit 3)              u16 days*
-    bits 2–7: reserved
+    bit 2: gps_binary    compact GPS coordinates (standard cross-template assignment)    [int16 lat×100][int16 lon×100] = 4 bytes
+                         lat_scaled = latitude × 100 (range ±327.67°; covers ±90° ✓)
+                         lon_scaled = longitude × 100 (range ±327.67°; covers ±180° ✓)
+                         Precision: ±0.01° ≈ ±1.1 km. May coexist with UTF-8 `location` field (bit 3 of field_flags).
+                         Post-MVP: int32 ×1000 (8 bytes, ±111 m) if sector use cases require it.
+    bits 3–7: reserved for template-defined custom fields
 
   For EXT_TEMPLATE records: bits 0–7 defined by the ext_template domain schema.
   FLAGS4 data blocks follow field_flags4 in ascending bit order, same encoding rules as FLAGS3 blocks.
@@ -904,7 +1059,8 @@ Which blocks are present for each BASE_TEMPLATE type:
 | line_index | — | — | — | — | cond |
 | changed field values | — | — | — | — | ✓ |
 | display_schema | cond | cond | cond | — | — |
-| form_schema | cond | — | — | — | — |
+| TRIG block (meta2 bit 5, top-level) | cond | cond | cond | cond | cond |
+| form_schema | cond | cond | cond | — | — |
 | security wrapper | optional | optional | optional | optional | optional |
 | alt_id (per participant) | cond | cond | cond | cond | cond |
 
@@ -914,16 +1070,206 @@ Which blocks are present for each BASE_TEMPLATE type:
 
 ---
 
-## 7. Open Design Points
+## 16. Design Status
 
-These are not unresolved decisions but implementation-time choices:
+| Point | Status | Note |
+|-------|--------|------|
+| Codebook tag string | ✓ Resolved | `1pa` — pads v1, package a (OQ-1) |
+| DECIMAL_POS=111 extension | ✓ Resolved | `111` = flat uint24 backup mode (no DECIMAL_POS scaling; value in smallest currency unit). See CODEC-EVOLUTION.md CODEC-2. |
+| TAX_CODE 01/10 rates | ✓ Resolved | No rates baked in — always explicit. 01=inclusive requires tax_block with rate+amount; 10=exclusive same. (OQ-4) |
+| DOMAIN=11 hybrid mode | ✓ Resolved | Hybrid I>O + Account Pair. Adds `account_pair_byte` after transaction_byte. Same setup/transaction bytes as DOMAIN=01. See §17. (OQ-7) |
+| FLAGS4 layout | ✓ Resolved | Template-defined. Contact/entity: bits 0–4 (vCard fields). Financial: bit 0=service_ref, bit 1=expiry_date. (§14) |
+| uint16 length prefix byte order | ✓ Resolved | Big-endian throughout — all uint16, uint24 (OQ-5) |
+| Epoch for COMPACT_TIME dates | ✓ Resolved | 2000-01-01. uint16 range extends to ~2179. (OQ-2) |
+| alt_id in participants block | ✓ Resolved | Option A confirmed (OQ-31). ROLE_TYPE 2-bit, HAS_ALT_ID at bit 4. See §13. |
+| DATA_SOURCE=11 anonymous mode | Design complete | Full design: ANON-MODE-DESIGN.md. Wire: DATA_SOURCE=11 in DISPLAY_CONTROL, SUBMIT_ACTION=11 required for forms. Blind pickup via HMAC-derived pickup_slot_key. |
+| TRIG block placement | ✓ Resolved | Option B: meta2 bit 5 (`HAS_TRIG_BLOCK`). Top-level block after participants, before security wrapper. Applies to all record types. display_flags2 bit 2 freed. (OQ-32c) |
+| currency_ext code table | ✓ Resolved | 154 currencies in 254 slots. See OQ-3 in OPEN-QUESTIONS.md. (FRAME-SPEC omits inline codes; OQ-3 is authoritative.) |
+| gps_binary FLAGS4 assignment | ✓ Resolved | FLAGS4 bit 2 = gps_binary, standard cross-template. [int16 lat×100][int16 lon×100] = 4 bytes. See §14. (OQ-15/template session) |
+| HKDF_KEY preamble bit | ✓ Resolved | Preamble byte bit 3 = HKDF_KEY (was part of KEY_HINT); KEY_HINT now bits 2–0. See §12. (OQ-te/ session) |
+| fin_control BILLED flag | ✓ Resolved | DOMAIN=01 fin_control bit 7 = BILLED (charge passed to customer). EXPENSE_CAT=00 forces BILLED=1. See §2. (OQ-7/DOMAIN session) |
 
-| Point | Note |
-|-------|------|
-| Codebook tag string | New tag (replacing `1eg`) to be chosen; must not start with `1e` to avoid false positives |
-| DECIMAL_POS=111 extension | Exotic precision extension byte not yet defined; leave as error |
-| TAX_CODE=01/10 codebook values | Standard/reduced rates defined per codebook package (e.g., package `c` → 20%/5% UK VAT) |
-| DOMAIN=11 (hybrid) | Reserved; decoder must reject |
-| FLAGS4 layout | Template-defined; Contact/entity template owns bits 0–4 of FLAGS4 (vCard extended fields) |
-| uint16 length prefix byte order | Little-endian (matching browser DataView defaults) vs big-endian — standardise at implementation |
-| Epoch for COMPACT_TIME dates | 2020-01-01 proposed; finalise at implementation |
+
+---
+
+## 17. DOMAIN=11 Hybrid Mode
+
+DOMAIN=11 carries both layers simultaneously: the I>O perspective classification (for the worker and customer UI) and the BitLedger Account Pair classification (for accounting integrations and reconciliation tools). Same record, two views — no re-entry required.
+
+### 17.1 Frame Layout for DOMAIN=11
+
+The setup_byte and transaction_byte are identical to DOMAIN=01 (I>O simple mode). One additional byte, `account_pair_byte`, follows the transaction_byte:
+
+```
+[setup_byte]           1 byte — identical to DOMAIN=01
+[transaction_byte]     1 byte — identical to DOMAIN=01 (I>O state + subtypes)
+[account_pair_byte]    1 byte — DOMAIN=11 only; follows transaction_byte
+
+  bits 7-4: ACCOUNT_PAIR   BitLedger 4-bit Account Pair code (0000–1101 active; see table below)
+  bit 3: AP_DIRECTION      0=debit primary account  1=credit primary account
+  bit 2: AP_STATUS         0=posted/settled  1=pending/future
+  bit 1: AP_COMPLETENESS   0=complete transaction  1=partial (split or installment)
+  bit 0: AP_EXTENSION      0=none  1=account_pair_ext byte follows (reserved post-MVP)
+```
+
+### 17.2 Account Pair Codes
+
+| Code | Account Pair | Income direction | Expense direction |
+|------|-------------|-----------------|-------------------|
+| 0000 | Op Expense / Asset | (N/A) | Expense paid from asset (cash expense) |
+| 0001 | Op Expense / Liability | (N/A) | Bill received (payable) |
+| 0010 | Non-Op Expense / Asset | (N/A) | One-time cost paid |
+| 0011 | Non-Op Expense / Liability | (N/A) | One-time cost on credit |
+| 0100 | Op Income / Asset | Cash sale received | Refund given |
+| 0101 | Op Income / Liability | Invoice sent (receivable) | Credit note issued |
+| 0110 | Non-Op Income / Asset | One-time income received | (N/A) |
+| 0111 | Non-Op Income / Liability | One-time income earned, not received | (N/A) |
+| 1000 | Asset / Liability | Asset acquired on credit | Loan repaid |
+| 1001 | Asset / Equity | Owner contribution | Owner distribution |
+| 1010 | Liability / Equity | Equity → Liability | Liability → Equity |
+| 1011 | Asset / Asset | Internal transfer in | Internal transfer out |
+| 1100 | Liability / Liability | Liability assumed | Liability transferred |
+| 1101 | Equity / Equity | Equity reallocated in | Equity reallocated out |
+| 1110 | Correction / Netting | (special — inference suspended) | |
+| 1111 | Compound continuation | (special — next line is continuation of compound) | |
+
+### 17.3 UI and Entry Model
+
+**Worker entry (Simple mode):** The worker always enters in I>O mode (DOMAIN=01 perspective). The I>O transaction_byte and fin_control are the worker-facing layer. The `account_pair_byte` is invisible to the worker during entry.
+
+**Accounting annotation path:** The `account_pair_byte` is attached in one of two ways:
+1. **App-assisted**: The app infers the Account Pair from the I>O state + EXPENSE_CAT combination and offers a confirmation: "This looks like an Operating Expense / Liability. Confirm?"
+2. **Integration-attached**: An accounting integration (bookkeeping app, sync service) reads the record via API, classifies it, and writes a State Commit amendment attaching the annotated account_pair_byte. The original record is not modified — the amendment carries the additional classification.
+
+**Decoder compatibility:**
+- DOMAIN=01 decoders encountering a DOMAIN=11 record: they read setup_byte and transaction_byte correctly (both identical to DOMAIN=01), then encounter one unexpected byte (account_pair_byte). A spec-compliant DOMAIN=01 decoder must skip unknown bytes after the transaction_byte gracefully.
+- DOMAIN=10 decoders encountering DOMAIN=11: the transaction_byte layout differs (DOMAIN=10 uses bits 7-4 for ACCOUNT_PAIR, DOMAIN=11 uses bits 7-3 for I>O state). These are incompatible. DOMAIN=10 decoders must check the DOMAIN bits before parsing transaction_byte.
+
+### 17.4 I>O to Account Pair Mapping (Inference Table)
+
+Common automated inferences for the annotation path:
+
+| I>O State | EXPENSE_CAT | Inferred Account Pair | Confidence |
+|-----------|------------|----------------------|-----------|
+| I<I (settled income) | — | 0100 Op Income / Asset | High |
+| I>I (future income) | — | 0101 Op Income / Liability | High |
+| I<O (refund given) | — | 0100 Op Income / Asset (reversal) | High |
+| I>O (credit note) | — | 0101 Op Income / Liability (reversal) | High |
+| O<O (settled expense) | 00 (job charge billed) | 0100 Op Income / Asset (COGS offset) | Medium |
+| O<O (settled expense) | 01 (COGS absorbed) | 0000 Op Expense / Asset | High |
+| O<O (settled expense) | 10 (running cost) | 0000 Op Expense / Asset | High |
+| O>O (future expense) | 01 (COGS) | 0001 Op Expense / Liability | High |
+| O>O (future expense) | 10 (running cost) | 0001 Op Expense / Liability | High |
+| O<I (reimbursed) | — | 1001 Asset / Equity (advance recovered) | Medium |
+| O>I (reimb. pending) | — | 1001 Asset / Equity (advance) | Medium |
+
+Medium-confidence inferences require a confirmation step in the UI before the account_pair_byte is attached.
+
+---
+
+### 17.5 Entry Type Matching Table (Deterministic)
+
+With entry type known at creation time, every combination resolves to a single Account Pair with no inference required. Entry type is the wizard screen the worker used — the app enforces which I>O states are reachable from each entry point.
+
+The `1110` Correction/Netting code is written only for programmatic/API-generated records that bypass the wizard, or when the entry type is unknown.
+
+#### Income-side entry types
+
+| Wizard Entry Type | I>O State | AP_DIR | Account Pair | AP_DIRECTION |
+|-------------------|-----------|--------|--------------|--------------|
+| Invoice (send bill) | I>I | Debit | 0101 Op Income / Liability | 0 (debit receivable) |
+| Cash sale (paid now) | I<I | Debit | 0100 Op Income / Asset | 0 (debit cash) |
+| Payment received (settling invoice) | I<I | Credit | 0101 Op Income / Liability | 1 (credit receivable — clears it) |
+| Refund given | I<O | Credit | 0100 Op Income / Asset | 1 (credit cash out) |
+| Credit note issued | I>O | Credit | 0101 Op Income / Liability | 1 (credit receivable reversal) |
+| Quote / Estimate | I>I | Debit | 0101 Op Income / Liability | 0 (same as invoice; DRAFT=1) |
+
+#### Expense-side entry types
+
+| Wizard Entry Type | I>O State | EXPENSE_CAT | Account Pair | AP_DIRECTION |
+|-------------------|-----------|-------------|--------------|--------------|
+| Running cost — cash paid | O<O | 10 | 0000 Op Expense / Asset | 0 (debit expense, credit cash) |
+| Running cost — bill received | O>O | 10 | 0001 Op Expense / Liability | 0 (debit expense, credit payable) |
+| Running cost — bill paid | O<O | 10 | 0001 Op Expense / Liability | 1 (debit payable — clears it) |
+| Job cost / COGS — cash paid | O<O | 01 | 0000 Op Expense / Asset | 0 (debit COGS, credit cash) |
+| Job cost / COGS — bill received | O>O | 01 | 0001 Op Expense / Liability | 0 (debit COGS, credit payable) |
+| Job charge — billed to customer | O<O | 00 | 0100 Op Income / Asset | 0 (COGS offset; appears on invoice) |
+| Reimbursement given (advance) | O>I | — | 1001 Asset / Equity | 0 (debit asset — advance owed back) |
+| Reimbursement received (recovery) | O<I | — | 1001 Asset / Equity | 1 (credit asset — advance recovered) |
+
+#### Balance sheet entry types (DOMAIN=11 extension, post-MVP wizard)
+
+| Wizard Entry Type | I>O State | Account Pair | AP_DIRECTION | Notes |
+|-------------------|-----------|--------------|--------------|-------|
+| Asset purchase — cash | O<O | 1011 Asset / Asset | 0 | Cash → fixed asset |
+| Asset purchase — on finance | O>O | 1000 Asset / Liability | 0 | Asset acquired on credit |
+| Loan repayment | O<O | 1000 Asset / Liability | 1 | Reduces liability |
+| Owner contribution | I<I | 1001 Asset / Equity | 0 | Capital injection |
+| Owner draw / distribution | O<O | 1001 Asset / Equity | 1 | Capital withdrawal |
+| Internal transfer | O<O | 1011 Asset / Asset | 0 | Between own accounts |
+
+---
+
+### 17.6 Type-Change Reconciliation at Creation Screen
+
+When a worker changes the entry type mid-creation, the app reconciles the frame encoding. Reconciliation rules cascade in this order:
+
+**Step 1 — Direction change (I↔O flip):**
+- `customer_amount` stays as the customer-facing amount
+- `worker_amount` stays as the worker-internal amount
+- DIRECTION bit in transaction_byte flips
+- EXPENSE_CAT resets to 10 (running cost) as the safe default if direction flips to O
+- Account Pair recalculated from new entry type
+
+**Step 2 — Settlement state change (Past↔Future, TIME bit):**
+- No field data changes — only TIME bit in transaction_byte flips
+- Account Pair recalculated (e.g. O<O → O>O shifts Asset to Liability pair)
+- AP_DIRECTION may change if the new state represents clearing a prior obligation
+
+**Step 3 — EXPENSE_CAT change (within O-direction):**
+- No field data changes
+- fin_control EXPENSE_CAT bits update
+- Account Pair recalculates (job charge ↔ COGS ↔ running cost all have different pairs)
+- BILLED flag in fin_control updates (EXPENSE_CAT=00 forces BILLED=1)
+
+**Step 4 — Entry type change requiring template switch:**
+- If the new entry type maps to a different BASE_TEMPLATE (e.g. switching from Invoice to Service Record), the app prompts: "Switching to [type] will remove the financial block. Continue?"
+- Field data shared between templates is preserved; template-specific fields are cleared
+- Account Pair recalculates from new entry type
+
+**Invariant:** The worker's entered amounts are never silently discarded. Direction changes swap the semantic label (income ↔ expense) but preserve the numeric values. The worker sees the amount relabelled, not erased.
+
+---
+
+### 17.7 Accounting Detail Display (Plain-English Account Names)
+
+When "Show accounting detail" is toggled on, the app derives plain-English labels from `ACCOUNT_PAIR` + `AP_DIRECTION`:
+
+| Account Pair | AP_DIRECTION=0 (debit primary) | AP_DIRECTION=1 (credit primary) |
+|---|---|---|
+| 0000 Op Expense / Asset | Debit: Expenses (Operating) / Credit: Assets (Cash) | Debit: Assets (Cash) / Credit: Expenses (Operating) — reversal |
+| 0001 Op Expense / Liability | Debit: Expenses (Operating) / Credit: Liabilities (Payable) | Debit: Liabilities (Payable) / Credit: Expenses (Operating) — payment |
+| 0010 Non-Op Expense / Asset | Debit: Expenses (Non-Operating) / Credit: Assets (Cash) | Debit: Assets (Cash) / Credit: Expenses (Non-Operating) |
+| 0011 Non-Op Expense / Liability | Debit: Expenses (Non-Operating) / Credit: Liabilities (Payable) | Debit: Liabilities (Payable) / Credit: Expenses (Non-Operating) |
+| 0100 Op Income / Asset | Debit: Assets (Cash) / Credit: Income (Operating) | Debit: Income (Operating) / Credit: Assets (Cash) — refund |
+| 0101 Op Income / Liability | Debit: Assets (Receivable) / Credit: Income (Operating) | Debit: Income (Operating) / Credit: Assets (Receivable) — credit note |
+| 0110 Non-Op Income / Asset | Debit: Assets (Cash) / Credit: Income (Non-Operating) | Debit: Income (Non-Operating) / Credit: Assets (Cash) |
+| 0111 Non-Op Income / Liability | Debit: Assets (Receivable) / Credit: Income (Non-Operating) | Debit: Income (Non-Operating) / Credit: Assets (Receivable) |
+| 1000 Asset / Liability | Debit: Assets (Fixed) / Credit: Liabilities (Finance) | Debit: Liabilities (Finance) / Credit: Assets (Cash) — repayment |
+| 1001 Asset / Equity | Debit: Assets (Cash) / Credit: Equity (Capital) | Debit: Equity (Capital) / Credit: Assets (Cash) — distribution |
+| 1010 Liability / Equity | Debit: Liabilities / Credit: Equity | Debit: Equity / Credit: Liabilities |
+| 1011 Asset / Asset | Debit: Assets (Destination) / Credit: Assets (Source) | Debit: Assets (Source) / Credit: Assets (Destination) |
+| 1100 Liability / Liability | Debit: Liabilities (Assumed) / Credit: Liabilities (Transferred) | reverse |
+| 1101 Equity / Equity | Debit: Equity (Destination) / Credit: Equity (Source) | reverse |
+| 1110 Correction / Netting | "Unclassified — review needed" | — |
+| 1111 Compound continuation | (internal; not displayed) | — |
+
+**Display format in app:**
+```
+▼ Accounting detail
+  Type:    Operating Expense
+  Debit:   Expenses (Operating)
+  Credit:  Assets (Cash)
+```
+
+Type label derived from Account Pair's primary account category. Debit/Credit labels from the table above. No code numbers shown to the worker.

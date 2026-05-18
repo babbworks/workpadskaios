@@ -1,46 +1,101 @@
 # Participants Role Codebook
 
-**Version:** 1.0 — 2026-05-15  
-**Decision source:** D20 (codec evolution session)  
-**Status:** Complete for 1-byte range; 2-byte extension defined by group  
+**Version:** 1.1 — 2026-05-17
+**Decision source:** D20 (codec evolution session), OQ-31 Option A (2-bit ROLE_TYPE, 2026-05-17)
+**Status:** Complete for 1-byte range; 2-byte extension defined by group
 
 ---
 
 ## 1. Wire Format
 
-### 1.1 ROLE_TYPE 3-bit quick-select (part_flags bits 6–4)
+### 1.1 ROLE_TYPE 2-bit quick-select (part_flags bits 6–5)
 
-Zero extra bytes. Covers the most frequent participant roles in workpads records globally.
+Zero extra bytes. Covers the three primary participant relationships in workpads records. Bit 4 of part_flags freed for `HAS_ALT_ID` (OQ-31 Option A).
 
 | Code | Value | UI Label | Who it means |
 |------|-------|----------|--------------|
-| `000` | 0 | Customer / Client | Person or org being billed or serviced |
-| `001` | 1 | Worker / Tradesperson | The sending worker (often IS_SENDER=1 too) |
-| `010` | 2 | Supplier / Vendor | Provides goods or materials to the sender |
-| `011` | 3 | Subcontractor | External party doing part of the work |
-| `100` | 4 | Employee / Staff | Employed by the sender or the organisation |
-| `101` | 5 | Agent / Representative | Acts on behalf of another party |
-| `110` | 6 | Authority / Inspector | Regulatory, government, or inspection body |
-| `111` | 7 | **Extended** — see role_code below | |
+| `00` | 0 | Customer / Client | Person or org being billed or serviced |
+| `01` | 1 | Worker / Tradesperson | The sending worker (often IS_SENDER=1 too) |
+| `10` | 2 | Supplier / Vendor | Provides goods or materials to the sender |
+| `11` | 3 | **Extended** — read role_code byte | Subcontractor, Employee, Agent, Authority, and all specialist roles |
 
-### 1.2 Extended role_code (when ROLE_TYPE = 111)
+Former quick-select roles now accessed via role_code path (ROLE_TYPE=11):
+- Subcontractor → compressed slot 0 in role_code byte (see §1.3)
+- Employee/Staff → compressed slot 1
+- Agent/Representative → compressed slot 2
+- Authority/Inspector → compressed slot 3
 
-Follows immediately after the name field (and phone/email if present), in the `role_text` position.
+### 1.2 Extended role_code (when ROLE_TYPE = 11)
+
+Follows immediately after the name field (and phone/email if present).
 
 **Decoding rules:**
 
-- `HAS_ROLE_TEXT = 0`: role_code bytes follow (no length prefix)
-  - Byte 1 = `0x00`–`0xFE`: 1-byte code (see §2)
-  - Byte 1 = `0xFF`: 2-byte code — byte 2 follows (see §3)
-- `HAS_ROLE_TEXT = 1`: `[uint16 len][UTF-8]` free-text role label (legacy behavior, always valid)
+- `HAS_ROLE_TEXT = 0`: role_code byte(s) follow (no length prefix)
+  - role_code byte: `bits 7-3` = ROLE_SLOT (5 bits), `bits 2-0` = ROLE_SIGNALS (3 bits)
+  - ROLE_SLOT 0–30: compressed common-role codebook (see §1.3)
+  - ROLE_SLOT 31 (0b11111): extended → read full 1-byte code from §2 (signals bits still apply)
+  - When ROLE_SLOT=31: next byte = 0x00–0xFE (§2 one-byte range) or 0xFF (§3 two-byte range)
+- `HAS_ROLE_TEXT = 1`: `[uint16 len][UTF-8]` free-text role label (always valid fallback)
 
-**Byte layout for 1-byte range:**
+**role_code byte layout:**
+```
+bits 7-3: ROLE_SLOT    (5 bits — 0-30 common codebook; 31 = extended → read next byte)
+bits 2-0: ROLE_SIGNALS (3 bits — universal flags, apply to any role)
 
+ROLE_SIGNALS:
+  bit 2: CERT   — holds relevant certification or professional license for this role
+  bit 1: AUTH   — authorized signatory / has authority for this transaction or scope
+  bit 0: LEAD   — primary or lead person when multiple of same role type are present
 ```
-bits 7-4: group (0–15, 16 groups)
-bits 3-0: role within group (0–14 = specific role; 15 = reserved/group-level)
-0xFF = 2-byte extension escape
-```
+
+### 1.3 Compressed Common-Role Codebook (ROLE_SLOT 0–30)
+
+31 roles covering >85% of extended-path usage. ROLE_SLOT 30 = Other (free text follows). ROLE_SLOT 31 = extended redirect to §2/§3 full codebook.
+
+| Slot | Role | §2 code equivalent |
+|------|------|--------------------|
+| 0 | Subcontractor | — (former quick-select) |
+| 1 | Employee / Staff | — (former quick-select) |
+| 2 | Agent / Representative | — (former quick-select) |
+| 3 | Authority / Inspector | — (former quick-select) |
+| 4 | Business Owner / Proprietor | 0x00 |
+| 5 | Manager (general) | 0x02 |
+| 6 | Project Manager | 0x04 |
+| 7 | Accountant / Bookkeeper | 0x10 |
+| 8 | Auditor | 0x11 |
+| 9 | Tax / Revenue Officer | 0xC1 |
+| 10 | Lawyer / Attorney | 0x20 |
+| 11 | Doctor / Physician | 0x40 |
+| 12 | Nurse / Community Health Worker | 0x41/0x44 |
+| 13 | Teacher / Trainer | 0xD0 |
+| 14 | General Contractor | 0x50 |
+| 15 | Electrician | 0x51 |
+| 16 | Plumber | 0x52 |
+| 17 | Carpenter | 0x53 |
+| 18 | Driver (general) | 0x70 |
+| 19 | Farmer | 0x60 |
+| 20 | Market Trader / Vendor | 0x85 |
+| 21 | Mobile Money Agent | 0x15 |
+| 22 | Security Guard | 0xEC |
+| 23 | NGO / Development Project Officer | 0xE0 |
+| 24 | Community Health Volunteer | 0xE1 |
+| 25 | Engineer (general) | 0xF1 |
+| 26 | IT Support | 0xA1 |
+| 27 | Site Supervisor | 0x5C |
+| 28 | Administrative Clerk | 0xCA |
+| 29 | Insurance Agent | 0x1A |
+| 30 | Other — free text follows (HAS_ROLE_TEXT=1) | 0xFE |
+| 31 | **EXTENDED** — read next byte (§2 or §3) | — |
+
+**Byte usage comparison:**
+
+| Scenario | Old design | New design |
+|----------|-----------|-----------|
+| Site supervisor, certified | 0x5C (1B) + free-text "certified" (9B) | ROLE_SLOT=27, CERT=1 → 1B total |
+| Authorized project manager | 0x04 (1B) + no signal | ROLE_SLOT=6, AUTH=1 → 1B total |
+| Lead electrician in crew | 0x51 (1B), no distinction | ROLE_SLOT=15, LEAD=1 → 1B total |
+| Rare specialist (surgeon) | 0xFF 0x10 = 2B | ROLE_SLOT=31 + 0x10 + signals = 2B (same bytes, signals added) |
 
 ---
 
@@ -395,51 +450,55 @@ When byte 1 = `0xFF`, byte 2 selects from the extended range. Groups align with 
 
 ---
 
-## 4. Encoding Decision (D20)
+## 4. Encoding Decision (D20, revised OQ-31 Option A)
 
-**Decision:** ROLE_TYPE 3-bit quick-select retained. Extended role_code uses escape-code scheme.
+**Decision:** ROLE_TYPE reduced to 2-bit (OQ-31 Option A). Bit 4 of part_flags freed for HAS_ALT_ID. Extended path uses 5-bit compressed codebook + 3-bit signals.
 
 ```
-part_flags ROLE_TYPE=111 (extended):
+part_flags ROLE_TYPE=11 (extended):
   HAS_ROLE_TEXT=0:
-    role_code byte 1 = 0x00–0xFE  → 1-byte code (§2)
-    role_code byte 1 = 0xFF        → read byte 2 for 2-byte code (§3)
+    role_code byte:
+      bits 7-3: ROLE_SLOT  (0-30 = §1.3 compressed codebook; 31 = extended → read next byte)
+      bits 2-0: ROLE_SIGNALS (CERT, AUTH, LEAD)
+    When ROLE_SLOT=31:
+      next byte 0x00–0xFE → 1-byte full code (§2), ROLE_SIGNALS from first byte apply
+      next byte 0xFF       → read byte 3 for 2-byte code (§3), ROLE_SIGNALS apply
   HAS_ROLE_TEXT=1:
-    [uint16 len][UTF-8] free text label — always valid fallback
+    [uint16 len][UTF-8] free text label — always valid fallback; ROLE_SIGNALS not applicable
 ```
 
 **Capacity:**
-- 7 zero-byte super-category codes (ROLE_TYPE 0–6)
-- 1-byte range: 240 specific named roles + 16 group-level slots
-- 2-byte range: ~224 additional specialist/regional roles
+- 3 zero-byte quick-select codes (Customer, Worker, Supplier/Vendor)
+- ROLE_SLOT compressed common codebook: 30 named roles + Other + Extended redirect
+- Full 1-byte range (via ROLE_SLOT=31): 240 specific named roles + 16 group-level slots
+- Full 2-byte range (via 0xFF): ~224 additional specialist/regional roles
 - 3-byte: future extension only (0xFF 0xFF prefix)
+- ROLE_SIGNALS (CERT/AUTH/LEAD) apply to ALL extended-path roles at zero extra cost
 - Free text: always available via HAS_ROLE_TEXT=1
 
 ---
 
-## 5. ROLE_TYPE Super-Categories vs 1-Byte Codes
+## 5. ROLE_TYPE Quick-Select vs Extended Path
 
-The 3-bit quick-select maps to 1-byte code groups as follows. Encoders using a 1-byte role_code should use ROLE_TYPE=7 (extended) even when the role falls under a quick-select group — the code is more specific.
+The 2-bit quick-select covers primary relationships. Former quick-select roles (Subcontractor, Employee, Agent, Authority) now use the compressed codebook at ROLE_SLOT 0–3 — still 1 byte including signals.
 
 | ROLE_TYPE | Equivalent extended groups |
 |-----------|---------------------------|
-| 000 Customer | Group 8 (retail) client roles; no direct group overlap |
-| 001 Worker | Group 5 (construction), Group 7 (transport), Group 9 (personal service) |
-| 010 Supplier | Group 8 (retail/commerce), Group B (manufacturing) |
-| 011 Subcontractor | Group 5 (construction), Group 3 (professional services) |
-| 100 Employee | Group 0 (management), any group for employed roles |
-| 101 Agent | Group 1 (finance agent), Group 8 (sales rep), Group 3 |
-| 110 Authority | Group C (government/public sector) |
+| `00` Customer | Group 8 (retail) client roles; no direct group overlap |
+| `01` Worker | Group 5 (construction), Group 7 (transport), Group 9 (personal service) |
+| `10` Supplier | Group 8 (retail/commerce), Group B (manufacturing) |
+| `11` Extended | All named roles in §2/§3; former quick-selects at slots 0–3 |
 
 ---
 
 ## 6. UI Display Notes
 
-- **Quick-select (ROLE_TYPE 0–6):** Shown as 7 tap-targets on the participants screen. Works without any app update or codebook download.
-- **1-byte role_code:** Displayed from the built-in codebook. App ships with Group 0–F label strings in the codebook package.
-- **2-byte role_code:** App displays the group name + role name from codebook. Unknown codes fall back to the group name.
-- **Free text (HAS_ROLE_TEXT=1):** Displayed as typed. Stored as UTF-8 in the record.
-- **IS_ORG=1:** UI prefixes role with "Company:" or "Org:" as appropriate (e.g. "Company: Supplier").
+- **Quick-select (ROLE_TYPE 00–10):** Shown as 3 tap-targets on the participants screen. Works without any codebook download.
+- **Compressed codebook (ROLE_SLOT 0–30):** App ships these 31 labels in the base codebook. Displayed immediately. ROLE_SIGNALS shown as badges: `[✓ Certified]`, `[✓ Authorized]`, `[Lead]`.
+- **Full 1-byte role_code (ROLE_SLOT=31 + §2 code):** Displayed from built-in codebook Group 0–F labels.
+- **2-byte role_code:** App displays group name + role name. Unknown codes fall back to group name.
+- **Free text (HAS_ROLE_TEXT=1):** Displayed as typed. Stored as UTF-8. ROLE_SIGNALS not applicable.
+- **IS_ORG=1:** UI prefixes role with "Company:" or "Org:" as appropriate.
 
 ---
 

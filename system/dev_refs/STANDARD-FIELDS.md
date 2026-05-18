@@ -25,7 +25,7 @@
 |-----|---------------|------------|-----------|--------------|-------|
 | 0 | `job` | `[u16 len][UTF-8]` | 120 B | — | Job title / service subject line |
 | 1 | `customer` | `[u16 len][UTF-8]` | 120 B | — | Customer / client name |
-| 2 | `date` | `[u16 days]` (COMPACT) or `[u16 len][UTF-8]` | 10 B / 2 B | ✓ days since 2025-01-01 | Date of service or transaction |
+| 2 | `date` | `[u16 days]` (COMPACT) or `[u16 len][UTF-8]` | 10 B / 2 B | ✓ days since 2000-01-01 | Date of service or transaction |
 | 3 | `location` | `[u16 len][UTF-8]` | 160 B | — | Service address / site |
 | 4 | `meeting_time` | `[u16 min]` (COMPACT) or `[u16 len][UTF-8]` | 40 B / 2 B | ✓ minutes since midnight | Appointment / meeting time |
 | 5 | `start_time` | `[u16 min]` (COMPACT) or `[u16 len][UTF-8]` | 40 B / 2 B | ✓ minutes since midnight | Job start time |
@@ -69,31 +69,94 @@ Present when field_flags bit 15 (FLAGS3_PRESENT) = 1.
 | Bit | Canonical name | Data block | Notes |
 |-----|---------------|------------|-------|
 | 0 | `context_label` | `[u8 len][UTF-8]`, max 40 B | Child record job reference (D9). Short identifying text for standalone intelligibility ("Boiler repair, 42 High St"). |
-| 1 | `tag` | `[u8 len][UTF-8]`, max 60 B | Category / user label for the record |
-| 2 | `qty_unit` | `[u8 len][UTF-8]`, max 12 B | Custom unit label overriding decoder default — e.g. "hrs", "kg", "pcs", "days" |
-| 3 | `expiry_date` | `[u16 days]` (COMPACT) or `[u16 len][UTF-8]` | Quote or offer expiry date |
+| 1 | `tag` | `[u8 len][UTF-8]`, max 60 B | Category / user label(s). Multiple tags encoded as comma-separated string: `"travel,urgent,warranty"`. App auto-inserts comma on space-after-word in tag input. Project association uses comma-separated project UIDs in the same field when tags are structural IDs; see §3.1 for convention. |
+| 2 | `qty_unit` | `[u8 len][UTF-8]`, max 12 B | Unit label override — e.g. `"hrs"`, `"kg"`, `"pcs"`, `"days"`. **Only present when overriding the template default.** Templates declare a `default_unit` in their definition; decoders use that when `qty_unit` is absent. If no template default and `qty_unit` absent, fallback to `fin_control.QTY_TYPE` signal (0=units, 1=hrs). |
+| 3 | `date_end` | `[u16 days]` (COMPACT) or `[u16 len][UTF-8]` | Period end date — service period, contract end, report range end. Pairs with `date` (bit 2) to bound a date range. Used by State Commit records and period reports. Note: offer/quote expiry date is in FLAGS4 bit 1 (`expiry_date`), not here. |
 | 4 | `attachment` | `[u16 len][UTF-8]`, max 500 B | URL or hash of attached document / photo |
 | 5 | `uid` | `[u16 len][UTF-8]`, max 80 B | Record / contact unique identifier (maps to vCard UID; enables cross-record linking) |
 | 6 | `url` | `[u16 len][UTF-8]`, max 500 B | Website, social profile, or reference URL for the participant or service |
 | 7 | `FLAGS4_PRESENT` | gate | Fourth field flags byte follows (domain-specific fields) |
 
+### 3.1 Multi-tag and Project Association Convention
+
+The `tag` field (FLAGS3 bit 1) is a single UTF-8 string, max 60 B. Multiple values are encoded as a comma-separated list within that string:
+
+```
+"travel,urgent"           → two tags
+"warranty,Q2-2026"        → tag + time label
+"proj:alpha,proj:beta"    → project association using prefix convention
+```
+
+**Project association pattern**: prefix project IDs with `proj:` to distinguish them from free-form tags. The app's tag input auto-inserts a comma when the user presses space after a word (micro-interaction — implement in tag input component). Project IDs in this field are opaque strings — they match the `uid` of a project-type record.
+
+**Design session pending**: long-term, project association should be a first-class wire structure (dedicated `project_ref` block with typed UID, not string-in-tag). Multi-project assignment (one record → N projects) cannot be cleanly expressed in 60 bytes. Flag: PROJECT-ASSOCIATION-DESIGN.md needed before v1.0.
+
+**Single-tag records** (the common case) need no special handling — the decoder reads the tag field as a plain string and displays it directly. Comma detection is UI-layer.
+
+**Financial record constraint**: a financial record (BASE_TEMPLATE=001) MAY contain at most one `proj:` prefix in its tag string. Two or more project associations on a financial item creates an accounting split ambiguity. The app enforces this at entry time; the wire format does not. If a cost genuinely spans two projects, encode two separate records with individual amounts. See PROJECT-ASSOCIATION-DESIGN.md for the full pattern.
+
 ---
 
 ## 4. FLAGS4 — domain-specific (template-defined)
 
-FLAGS4 is present when FLAGS3 bit 7 = 1. Bit layout within FLAGS4:
+FLAGS4 is present when FLAGS3 bit 7 = 1. Each bit in FLAGS4 is **independently gated** — the decoder checks each bit separately. Setting FLAGS4_PRESENT does NOT imply any specific FLAGS4 bit is set; it only means the FLAGS4 byte itself follows. Any combination of bits 0–6 may be set or unset independently.
 
 ```
-bit 7: FLAGS5_PRESENT   (chaining, same pattern)
+bit 7: FLAGS5_PRESENT   (chaining gate — FLAGS5 byte follows when set)
 bits 6-0: 7 domain-specific slots
 ```
 
-Slot assignments are defined per template in the template's codebook definition. No universal assignments at this level — domain templates own their FLAGS4 slots.
-
-**Reserved domain ranges (by BASE_TEMPLATE):**
+**Template assignments (by BASE_TEMPLATE):**
 - Template 011 (Contact/entity): FLAGS4 bits 0-4 = vCard extension fields (see §6)
-- Template 101 (State Commit): FLAGS4 bits 0-2 = summary type fields
-- All other templates: free to define their own FLAGS4 assignments
+- Template 101 (State Commit): FLAGS4 bits 0-2 = summary type fields (TBD)
+- Template 001 (Financial record): FLAGS4 bits 0-6 fully assigned (see §4.1)
+- EXT_TEMPLATE records: FLAGS4 bits 0-6 defined by the ext_template domain schema
+
+### 4.1 Financial Record FLAGS4 (BASE_TEMPLATE=001)
+
+| Bit | Field | Encoding | Notes |
+|-----|-------|----------|-------|
+| 0 | `service_ref` | `[u8 len][UTF-8]` | Back-reference to service template that generated this record. Optional — absent for ad-hoc records. |
+| 1 | `expiry_date` | `u16 days` (COMPACT) or `[u16 len][UTF-8]` | Quote or offer expiry date. (Moved from FLAGS3 bit 3 — FLAGS3 bit 3 is now `date_end`.) |
+| 2 | `payment_method` | 1 byte enum | How the transaction was or will be settled. See §4.2 for enum table. |
+| 3 | `discount` | `uint24` | Fixed discount amount. SF and DECIMAL_POS apply (same as `customer_amount`). **Wire format always stores the actual currency amount, never a percentage.** If the user entered a percentage, the app converts to amount before encoding. Percentage display is a template presentation control — template can declare `discount_display: "amount"` (show `"£12.50 discount"`), `"pct_derived"` (show `"10% (£12.50)"`), or `"pct_only"` (show `"10% discount"` — back-calculated at render time). |
+| 4 | `deposit_paid` | `uint24` | Deposit or advance payment already received. SF and DECIMAL_POS apply. Display: `Balance = customer_amount − deposit_paid`. |
+| 5 | `po_number` | `[u8 len][UTF-8]` | Buyer's purchase order or reference number (distinct from `ref_number` which is the seller's ref). |
+| 6 | `payment_ref` | `[u8 len][UTF-8]` | Payment confirmation code — M-Pesa transaction ID, bank reference, USSD receipt, etc. |
+| 7 | `FLAGS5_PRESENT` | gate | FLAGS5 byte follows (withholding tax, cross-currency fields — post-MVP). |
+
+### 4.2 payment_method enum
+
+| Code | Method | Notes |
+|------|--------|-------|
+| 0x00 | Unspecified | |
+| 0x01 | Cash | |
+| 0x02 | Mobile money (generic) | |
+| 0x03 | M-Pesa | Kenya, Tanzania, DRC, Mozambique |
+| 0x04 | MTN Mobile Money | West/Central Africa |
+| 0x05 | Airtel Money | East/West Africa |
+| 0x06 | Orange Money | West Africa |
+| 0x07 | Bank transfer | |
+| 0x08 | Debit card | |
+| 0x09 | Credit card | |
+| 0x0A | Cheque | |
+| 0x0B | USSD payment | |
+| 0x0C | Cryptocurrency | |
+| 0x0D | Barter / trade | |
+| 0x0E | Credit (pay later) | |
+| 0x0F | Split / partial (multiple methods) | |
+| 0x10–0x1F | Regional mobile money operators | Expandable range |
+| 0x20–0xFE | Reserved | |
+| 0xFF | Extended / other | |
+
+### 4.3 FLAGS5 Financial (post-MVP reserve)
+
+Reserved for:
+- bit 0: `withholding_tax` — uint24 WHT amount (mandatory deduction in Kenya, Nigeria, Ghana, South Africa for B2B)
+- bit 1: `fx_amount` — uint24 amount in original foreign currency (for cross-border records)
+- bit 2: `fx_rate` — uint24 exchange rate applied
+- bits 3–6: payment terms signal, recurring interval, bank payment details pointer
+- bit 7: FLAGS6_PRESENT gate
 
 ---
 
@@ -283,7 +346,7 @@ When meta2 SELF_DESCRIBING=1 (D11), each data block is prefixed with a 1-byte ca
 | 0x10 | `context_label` | FLAGS3 bit 0 |
 | 0x11 | `tag` | FLAGS3 bit 1 |
 | 0x12 | `qty_unit` | FLAGS3 bit 2 |
-| 0x13 | `expiry_date` | FLAGS3 bit 3 |
+| 0x13 | `date_end` | FLAGS3 bit 3 |
 | 0x14 | `attachment` | FLAGS3 bit 4 |
 | 0x15 | `uid` | FLAGS3 bit 5 |
 | 0x16 | `url` | FLAGS3 bit 6 |
@@ -300,7 +363,7 @@ Index `0x0F` is intentionally skipped (financial block gate alignment). Indices 
 |------------|----------|-------|
 | Standard text (long) | `[u16 len][UTF-8]` | 2 + N |
 | Compact text (short fields) | `[u8 len][UTF-8]` | 1 + N |
-| Date (COMPACT_TIME=1) | `u16` days since 2025-01-01 | 2 |
+| Date (COMPACT_TIME=1) | `u16` days since 2000-01-01 | 2 |
 | Time (COMPACT_TIME=1) | `u16` minutes since midnight | 2 |
 | Amount | `u24` (uint24, big-endian) | 3 |
 | Boolean flag-only | *(no data block — flag IS the value)* | 0 |

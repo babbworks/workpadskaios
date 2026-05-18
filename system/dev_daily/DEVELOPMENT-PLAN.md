@@ -60,6 +60,8 @@ not the other way around. Key standard docs and what they govern:
 **When the standard and this app diverge:** register in `DEVIATIONS.md` immediately.
 Do not leave divergences undocumented — silent divergence from dotme is the biggest risk.
 
+**When kaios design advances past the standard:** add a SUI entry to `../workpads-standard/STANDARD-UPDATES.md`. This is how we track what the standard owes us — not via memory. The SUI register is the to-do list for keeping the standard current. Any kaios draft_specs/ file reaching `draft-spec` status needs a corresponding SUI entry.
+
 ### 2. BASICS Conformance
 **Current claim:** BASICS Core tier (v1, settled 2026-04-27)
 **Path:** `../workpads-standard/basics-conformance.md`

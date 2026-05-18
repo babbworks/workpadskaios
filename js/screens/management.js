@@ -56,7 +56,7 @@
           '</div>' +
           '<div class="view-field">' +
             '<div class="view-field-label">Codec</div>' +
-            '<div class="view-field-value">codebook-c-kaios (1eg/) + fflate</div>' +
+            '<div class="view-field-value">pads-v1 (1pa/) + fflate</div>' +
           '</div>';
         var arcRow = document.getElementById('mgmt-arc-row');
         if (arcRow) arcRow.addEventListener('click', function() { App.showArchive(); });
@@ -256,7 +256,7 @@
       '</div>' +
       '<div class="view-field">' +
         '<div class="view-field-label">Codec</div>' +
-        '<div class="view-field-value">bitpad-c (1eg/) + fflate</div>' +
+        '<div class="view-field-value">pads-v1 (1pa/) + fflate</div>' +
       '</div>' +
       '<div class="view-field">' +
         '<div class="view-field-label">Platform</div>' +

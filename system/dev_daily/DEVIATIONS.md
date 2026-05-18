@@ -9,9 +9,9 @@ Format: status = `open` | `fixed` | `accepted` | `superseded`
 
 **Description:** workpadskaios emits the legacy URL format `https://workpads.me/p#alg=bitpad-v1&v=1&d=<payload>`. The workpads-standard and workpadsdotme expect the canonical scheme tag format `1dg/<payload>` (or `1eg/` after codebook-c).
 
-**Status:** fixed (2026-05-15)
+**Status:** fixed (2026-05-17 — supersedes 2026-05-15 partial fix)
 
-**Fix:** `js/lib/codec.js` upgraded to codebook-c-kaios. `encode()` now emits `1eg/` (template `0x02`, 24-bit flags). Legacy decoders retained for `1ag/`, `1bg/`, `1cg/`, `1dg/`, and `alg=bitpad-v1`. Note: `1eg/` is a kaios-specific extended format — kaios can decode dotme `1dg/` URLs but dotme cannot decode kaios `1eg/` URLs; this is intentional (extended flag space for participants, chain, etc.).
+**Fix:** `js/lib/codec.js` fully rewritten to pads-v1. `encode()` now emits `#1pa/` (FRAME-SPEC v1.0, meta bytes + field flags). Legacy decoders retained for `1eg/`, `1ag/`, `1bg/`, `1cg/`, `1dg/`, and `alg=bitpad-v1`. `share.js` and `management.js` display strings updated to reference `1pa/` codec.
 
 **References:** `CODEC-SYNC.md`, `workpads-standard/codec.md §Scheme Tags`
 
