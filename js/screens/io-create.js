@@ -77,7 +77,9 @@
     if (el.title) el.title.textContent = 'Share with';
     var rows = '';
     if (!contacts.length) {
-      rows = '<div class="empty-state" style="padding:8px 10px;">No contacts yet.</div>' +
+      rows = (global.EmptyState
+        ? EmptyState.render('No contacts yet', { hint: 'Add a contact from the list first.', action: 'Back to add later' })
+        : '<div class="empty-state" style="padding:8px 10px;">No contacts yet.</div>') +
         '<div class="type-picker-row focused" data-ci="skip">' +
         '<span class="type-picker-label">Continue without contact</span></div>';
     } else {
@@ -186,6 +188,7 @@
 
   function goBack() {
     if (step === 0) {
+      if (App.goBack && App.goBack()) return;
       if (returnTo === 'home') App.showHome();
       else App.showList();
       return;

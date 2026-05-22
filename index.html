@@ -75,10 +75,42 @@
       <span class="sc-back" onclick="SaleTallyScreen.onKey('Backspace')">&#8249; Back</span>
     </div>
     <div class="content" id="sale-tally-content"></div>
+    <div id="sale-lock-overlay" class="sale-lock-overlay" style="display:none;" aria-hidden="true">
+      <div class="sale-lock-msg">Stall locked</div>
+      <div class="sale-lock-hint">Press * to unlock</div>
+    </div>
     <div class="softkeys">
       <span class="sk-lsk">Back</span>
       <span class="sk-csk" id="sale-tally-csk">Record</span>
-      <span class="sk-rsk">Full</span>
+      <span class="sk-rsk" id="sale-tally-rsk">Full</span>
+    </div>
+  </div>
+
+  <!-- ── Need / Offer / Connection create ────────────────────────────────── -->
+  <div id="screen-io-record" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label" id="io-record-title">New Need</span>
+      <span class="sc-back" onclick="IORecordScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="content" id="io-record-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Back</span>
+      <span class="sk-csk" id="io-record-csk">Next</span>
+      <span class="sk-rsk"></span>
+    </div>
+  </div>
+
+  <!-- ── Connections (rel-volume) ───────────────────────────────────────── -->
+  <div id="screen-connections" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label">Connections</span>
+      <span class="sc-back" onclick="ConnectionsScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="content" id="connections-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Back</span>
+      <span class="sk-csk">Open</span>
+      <span class="sk-rsk">New</span>
     </div>
   </div>
 
@@ -562,6 +594,20 @@
   <script src="js/lib/utils.js"></script>
   <script src="js/lib/ui-phase.js"></script>
   <script src="js/lib/sale-catalogue.js"></script>
+  <script src="js/lib/nav-stack.js"></script>
+  <script src="js/lib/filter-sheet.js"></script>
+  <script src="js/lib/lifecycle.js"></script>
+  <script src="js/lib/empty-state.js"></script>
+  <script src="js/lib/overlay-focus.js"></script>
+  <script src="js/lib/progressive-form.js"></script>
+  <script src="js/lib/in-out-frame.js"></script>
+  <script src="js/lib/capture-lens.js"></script>
+  <script src="js/lib/io-labels.js"></script>
+  <script src="js/lib/finance-aggregate.js"></script>
+  <script src="js/lib/invoice-lifecycle.js"></script>
+  <script src="js/lib/rel-volume.js"></script>
+  <script src="js/lib/rel-volume-settings.js"></script>
+  <script src="js/lib/social-ledger.js"></script>
   <script src="js/lib/ui-fields.js"></script>
   <script src="js/lib/countries.js"></script>
   <script src="js/lib/fflate.js"></script>
@@ -596,6 +642,8 @@
   <script src="js/screens/calendar-wp.js"></script>
   <script src="js/screens/sale-tally.js"></script>
   <script src="js/screens/io-create.js"></script>
+  <script src="js/screens/io-record.js"></script>
+  <script src="js/screens/connections.js"></script>
   <script src="js/screens/list.js"></script>
   <script src="js/screens/wizard.js"></script>
   <script src="js/screens/view.js"></script>

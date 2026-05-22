@@ -2,7 +2,7 @@
 
 **Status:** Living document — unified R1–R8 + IO/Sale decisions  
 **Audience:** Product + engineering  
-**Cross-ref:** [`UI-INTEGRATION-MAP.md`](../dev_refs/UI-INTEGRATION-MAP.md), [`FEATURES.md`](FEATURES.md)
+**Cross-ref:** [`UI-ROADMAP-STATUS.md`](UI-ROADMAP-STATUS.md) (**master checklist**), [`UI-INTEGRATION-MAP.md`](../dev_refs/UI-INTEGRATION-MAP.md), [`FEATURES.md`](FEATURES.md)
 
 ---
 

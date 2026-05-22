@@ -22,7 +22,13 @@ Agents resuming work must read [`project-process.md`](../project-process.md) + [
 
 **Shipped R3 (initial):** `sale-tally.js`, `io-create.js`, `sale-catalogue.js`; list **Sell** + key `8`; home **Sell**; type picker Outcome/Sale; `share_pending` tag; sales filter includes `sale`.
 
-**Next:** R5 screen lock; catalogue edit via long-press; panel Sales filter → tally.
+**R5/R6/R1 batch:** Sale screen lock (* toggle); session today total; catalogue edit/delete (RSK/3); panel **Sell** QC + **Quick sell** row; sales agg includes `sale` type; list **Pend** filter (key 7); sale list subline.
+
+**Tracker:** [`UI-ROADMAP-STATUS.md`](UI-ROADMAP-STATUS.md) — full R1–R8 + IO + UX batch scorecard (~45% done).
+
+**Shipped R1+R2:** `nav-stack.js`, `App.goBack()`, crumb bar; `filter-sheet.js`, unified Filters UI, panel activity sync.
+
+**Next (round order):** R3 lifecycle UX → R4 four money beats → R7 progressive form + In/Out frame → R8 tour paths.
 
 ---
 

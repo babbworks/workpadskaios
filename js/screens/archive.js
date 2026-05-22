@@ -17,9 +17,12 @@
 
   function render() {
     if (!records.length) {
-      el.content.innerHTML =
-        '<div class="empty-state">No archived records.<br>' +
-        '<span style="font-size:10px;color:var(--text-muted);">Archive a record from its view screen.</span></div>';
+      el.content.innerHTML = global.EmptyState
+        ? EmptyState.render('No archived records', {
+            hint: 'Archive a record from its view screen.',
+          })
+        : '<div class="empty-state">No archived records.<br>' +
+          '<span style="font-size:10px;color:var(--text-muted);">Archive a record from its view screen.</span></div>';
       if (el.csk) el.csk.textContent = '';
       return;
     }

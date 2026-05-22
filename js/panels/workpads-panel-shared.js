@@ -43,6 +43,13 @@
     var rec = S.context.record;
     var actId = panelActivityId();
     S.close();
+    if (kind === 'sell') {
+      App.showSaleTally({
+        returnTo: (typeof App !== 'undefined' && App.getCurrentScreen) ? App.getCurrentScreen() : 'list',
+        activityId: actId,
+      });
+      return true;
+    }
     if (kind === 'payable' || kind === 'receivable' || kind === 'loan') {
       App.showLiabilities({
         type:         kind,

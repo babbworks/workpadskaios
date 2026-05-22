@@ -16,11 +16,15 @@
   var WINDOW_LABELS = { all: 'All', month: 'Month', week: 'Week' };
 
   var OV_TYPE_OPTIONS = [
-    { val: null,      label: 'All types' },
-    { val: 'invoice', label: 'Invoices'  },
-    { val: 'quote',   label: 'Quotes'    },
-    { val: 'receipt', label: 'Receipts'  },
-    { val: '',        label: 'Jobs'      },
+    { val: null,         label: 'All types' },
+    { val: 'invoice',    label: 'Invoices'  },
+    { val: 'quote',      label: 'Quotes'    },
+    { val: 'receipt',    label: 'Receipts'  },
+    { val: 'sale',       label: 'Sales'     },
+    { val: '',           label: 'Jobs'      },
+    { val: 'need',       label: 'Needs'     },
+    { val: 'offer',      label: 'Offers'    },
+    { val: 'connection', label: 'Connections' },
   ];
 
   // ── Date window filter ────────────────────────────────────────────────────
@@ -278,7 +282,9 @@
   }
 
   function renderLoading() {
-    el.content.innerHTML = '<div class="empty-state">Loading\u2026</div>';
+    el.content.innerHTML = global.EmptyState
+      ? EmptyState.loading('Loading finance\u2026')
+      : '<div class="empty-state">Loading\u2026</div>';
   }
 
   // ── Load ──────────────────────────────────────────────────────────────────
@@ -290,7 +296,9 @@
       var mains = records.filter(function(r) { return !r.parentId; });
 
       if (!mains.length) {
-        el.content.innerHTML = '<div class="empty-state">No records yet.</div>';
+        el.content.innerHTML = global.EmptyState
+          ? EmptyState.render('No records yet', { hint: 'Create a job or sale from the list.', action: 'Key 1 — New record' })
+          : '<div class="empty-state">No records yet.</div>';
         WorkpadsPanel.setContext({ screen: 'finance-overview' });
         return;
       }

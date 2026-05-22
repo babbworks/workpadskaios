@@ -19,6 +19,7 @@
   var padsFilter       = null;  // 'received' | 'sent' | 'locked' | null
   var dateRange        = null;  // { start, end, label } from calendar-wp
   var listReturnTo     = null;  // 'home' | 'calendar' | null
+  var sharePendingFilter = false;
   var actPickerOpen    = false; // inline activity picker overlay
   var actPickerFocusIdx = 0;
   var actPickerFilter  = 'all'; // 'all' | 'own' | 'other'
@@ -39,6 +40,9 @@
   var PILL_IDS = ['tp-fl-all', 'tp-fl-standard', 'tp-fl-custom', 'tp-fl-received'];
   var sortPickerOpen   = false;
   var sortFocusIdx     = 0;
+  var filterSheetOpen  = false;
+  var filterSheetFocusIdx = 0;
+  var filterSheetRows  = [];
   var sortMode = localStorage.getItem('wp_sort_mode') || 'newest';
   var listDensity = parseInt(localStorage.getItem('wp_list_density') || '0', 10);
   // Focus mode: when true, hides chain derivative types and dims completed records.
@@ -103,6 +107,9 @@
     { value: 'pads',    label: 'Basic',    desc: 'Basic text pad (P/A/D/S)' },
     { value: 'newent',  label: 'Business', desc: 'New business entity'   },
     { value: 'contact', label: 'Contact',  desc: 'Contact record'        },
+    { value: 'need',       label: 'Need',       desc: 'Sourced or unsourced inputs' },
+    { value: 'offer',      label: 'Offer',      desc: 'Resource you can provide' },
+    { value: 'connection', label: 'Connection', desc: 'Bridge — point toward someone' },
   ];
 
   var CONTACT_CATEGORIES = [
@@ -140,6 +147,9 @@
     'pads':    'Basic',
     'newent':  'Business',
     'contact': 'Contact',
+    'need':       'Need',
+    'offer':      'Offer',
+    'connection': 'Connection',
   };
 
   var PANEL_FILTER_LABELS = {
@@ -158,7 +168,12 @@
 
   function fmt(rec) {
     var sub = [];
+    var rt = (rec.record_type || rec.recordType || '');
     if (rec.date)     sub.push(rec.date.slice(5));        // MM-DD
+    if (rt === 'sale' && rec.sale_qty) {
+      sub.push('x' + rec.sale_qty);
+      if (rec.amount) sub.push(CurrencyUtil.fmt(parseFloat(rec.amount || 0), rec.currency || ActivityService.getLocale().currency));
+    }
     if (rec.customer) sub.push(rec.customer.slice(0, 20));
     if (rec.receivedAt) sub.push('Received');
     return sub.join(' · ');
@@ -343,10 +358,160 @@
     callback(mains);
   }
 
+  function useFilterSheet() {
+    return global.FilterSheet && FilterSheet.enabled();
+  }
+
+  function useWorkSurface() {
+    return global.UIPhase && UIPhase.isOn('work_surface');
+  }
+
+  function rebuildFilterSheetRows() {
+    filterSheetRows = FilterSheet.buildRows({
+      sortMode: sortMode,
+      SORT_MODES: SORT_MODES,
+      SORT_LABELS: SORT_LABELS,
+      typeFilter: typeFilter,
+      TYPE_PICKER_LABELS: TYPE_PICKER_LABELS,
+      TEMPLATE_TYPES: TEMPLATE_TYPES,
+      activityFilter: activityFilter,
+      focusMode: focusMode,
+      sharePendingFilter: sharePendingFilter,
+      listGroupOn: listGroupOn,
+    });
+  }
+
+  function openFilterSheet(focusKind) {
+    toolbarFocusIdx = -1;
+    filterSheetOpen = true;
+    sortPickerOpen = false;
+    actPickerOpen = false;
+    typePickerOpen = false;
+    rebuildFilterSheetRows();
+    filterSheetFocusIdx = 0;
+    if (focusKind) {
+      for (var i = 0; i < filterSheetRows.length; i++) {
+        if (filterSheetRows[i].kind === focusKind ||
+            (focusKind === 'sort' && filterSheetRows[i].kind === 'sort' && filterSheetRows[i].selected) ||
+            (focusKind === 'type' && filterSheetRows[i].kind === 'type' && filterSheetRows[i].selected) ||
+            (focusKind === 'act' && filterSheetRows[i].kind === 'act' && filterSheetRows[i].selected)) {
+          filterSheetFocusIdx = i;
+          break;
+        }
+      }
+    }
+    render();
+  }
+
+  function closeFilterSheet() {
+    filterSheetOpen = false;
+    render();
+  }
+
+  function renderFilterSheet() {
+    var body = FilterSheet.renderHtml(filterSheetRows, filterSheetFocusIdx);
+    el.content.innerHTML = pickerShellHtml('Filters', body);
+    bindPickerCancel(closeFilterSheet);
+    var rowEls = el.content.querySelectorAll('[data-fs-idx]');
+    for (var i = 0; i < rowEls.length; i++) {
+      rowEls[i].addEventListener('click', (function(idx) {
+        return function() {
+          filterSheetFocusIdx = idx;
+          applyFilterSheetRow();
+        };
+      })(parseInt(rowEls[i].getAttribute('data-fs-idx'), 10)));
+    }
+    var foc = el.content.querySelector('[data-fs-idx="' + filterSheetFocusIdx + '"]');
+    if (foc) foc.scrollIntoView({ block: 'nearest' });
+  }
+
+  function applyFilterSheetRow() {
+    var row = filterSheetRows[filterSheetFocusIdx];
+    if (!row || row.kind === 'header') return;
+    var state = {
+      sortMode: sortMode,
+      typeFilter: typeFilter,
+      activityFilter: activityFilter.slice(),
+      focusMode: focusMode,
+      sharePendingFilter: sharePendingFilter,
+      listGroupOn: listGroupOn,
+    };
+    var multiAct = row.kind === 'act';
+    FilterSheet.applyRow(row, state, multiAct);
+    sortMode = state.sortMode;
+    localStorage.setItem('wp_sort_mode', sortMode);
+    typeFilter = state.typeFilter;
+    activityFilter = state.activityFilter;
+    focusMode = state.focusMode;
+    localStorage.setItem('wp_focus_mode', focusMode ? '1' : '0');
+    sharePendingFilter = state.sharePendingFilter;
+    listGroupOn = state.listGroupOn;
+    localStorage.setItem('wp_list_group', listGroupOn ? '1' : '0');
+    focusIdx = 0;
+    rebuildFilterSheetRows();
+    renderFilterSheet();
+  }
+
+  function getListFilters() {
+    return {
+      panel: panelFilter,
+      activities: activityFilter.slice(),
+      type: typeFilter,
+      sort: sortMode,
+      focus: focusMode,
+      sharePending: sharePendingFilter,
+      listGroup: listGroupOn,
+    };
+  }
+
+  function applyListFilters(f) {
+    if (!f) return;
+    if (f.panel !== undefined) panelFilter = f.panel;
+    if (f.activities !== undefined) {
+      activityFilter = f.activities.slice ? f.activities.slice() : [];
+    }
+    if (f.type !== undefined) {
+      typeFilter = f.type;
+      if (f.type !== null) panelFilter = null;
+    }
+    if (f.sort !== undefined) {
+      sortMode = f.sort;
+      localStorage.setItem('wp_sort_mode', sortMode);
+    }
+    if (f.focus !== undefined) {
+      focusMode = !!f.focus;
+      localStorage.setItem('wp_focus_mode', focusMode ? '1' : '0');
+    }
+    if (f.sharePending !== undefined) sharePendingFilter = !!f.sharePending;
+    if (f.listGroup !== undefined) {
+      listGroupOn = !!f.listGroup;
+      localStorage.setItem('wp_list_group', listGroupOn ? '1' : '0');
+    }
+    focusIdx = 0;
+    render();
+  }
+
+  function syncPanelFilters(f) {
+    if (useWorkSurface()) {
+      applyListFilters(f);
+      return;
+    }
+    if (!f) return;
+    if (f.panel !== undefined) panelFilter = f.panel;
+    if (f.activities !== undefined) {
+      activityFilter = f.activities.slice ? f.activities.slice() : [];
+    }
+    focusIdx = 0;
+    render();
+  }
+
   function render() {
     if (contactBrowserOpen) { renderContactBrowser(); return; }
     if (linkPickerOpen)   { renderLinkPicker();   return; }
     if (branchPickerOpen) { renderBranchPicker(); return; }
+    if (filterSheetOpen)  { renderFilterSheet(); return; }
+    if (useFilterSheet() && actPickerOpen) { actPickerOpen = false; openFilterSheet('act'); return; }
+    if (useFilterSheet() && sortPickerOpen) { sortPickerOpen = false; openFilterSheet('sort'); return; }
     if (actPickerOpen)  { renderActPicker();  return; }
     if (sortPickerOpen) { renderSortPicker(); return; }
     if (typePickerOpen) { renderTypePicker(); return; }
@@ -368,6 +533,9 @@
     }
     if (rt === 'payment') return '<span class="rt-badge rt-pmt">PMT</span>';
     if (rt === 'income')  return '<span class="rt-badge rt-inc">INC</span>';
+    if (rt === 'need') return '<span class="rt-badge rt-need">NEED</span>';
+    if (rt === 'offer') return '<span class="rt-badge rt-offer">OFFER</span>';
+    if (rt === 'connection') return '<span class="rt-badge rt-conn">CONN</span>';
     return '';
   }
 
@@ -504,7 +672,9 @@
       el.content.classList.remove('density-compact', 'density-minimal');
       el.content.innerHTML =
         renderPanelFilterBar() + renderFilterBar() +
-        '<div class="empty-state">No records.<br>Try another filter.</div>';
+        (global.EmptyState
+          ? EmptyState.render('No records', { hint: 'Try another filter or clear filters.', action: 'Key 3 — Filters' })
+          : '<div class="empty-state">No records.<br>Try another filter.</div>');
       bindFilters();
       return;
     }
@@ -556,6 +726,7 @@
   }
 
   function openTypePicker(mode) {
+    if (useFilterSheet() && (mode || 'filter') === 'filter') { openFilterSheet('type'); return; }
     toolbarFocusIdx  = -1;
     typePickerMode   = mode || 'filter';
     typePickerOpen    = true;
@@ -590,6 +761,11 @@
       if (rt === 'sale') {
         render();
         App.showSaleTally({ returnTo: 'list' });
+        return;
+      }
+      if (rt === 'need' || rt === 'offer' || rt === 'connection') {
+        render();
+        App.showIORecord({ recordType: rt, returnTo: 'list' });
         return;
       }
       if (rt && NEW_RECORD_BRANCH_TYPES[rt]) {
@@ -1246,10 +1422,18 @@
     var sel = CountryScreen && CountryScreen.getSelected ? CountryScreen.getSelected() : null;
     var flagHtml = sel ? CountryScreen.flagEmoji(sel.iso) : '\uD83C\uDF0D';
     var sellBtn = '<span class="badge lfb-badge badge-sell" id="list-sell-btn">Sell</span>';
+    var connBtn = '<span class="badge lfb-badge" id="list-conn-btn">Net</span>';
+    var filtBtn = '<span class="badge lfb-badge' + (useFilterSheet() ? ' badge-accent' : '') +
+      '" id="list-filters-btn">Filters</span>';
+    var pendBtn = '<span class="badge lfb-badge' + (sharePendingFilter ? ' badge-accent' : '') +
+      '" id="list-pending-btn" title="Share link not copied">Pend</span>';
     var flagBtn  = '<span class="lfb-flag" id="list-flag-btn">' + flagHtml + '</span>';
+    var sortTypeAct = useFilterSheet()
+      ? filtBtn
+      : (sortBtn + typeBtn + actBtn);
     return '<div class="list-filter-bar">' +
       countText +
-      sellBtn + sortBtn + typeBtn + actBtn + densBtn + grpBtn + focusBtn +
+      sellBtn + connBtn + pendBtn + sortTypeAct + densBtn + grpBtn + focusBtn +
       '<span style="flex:1;"></span>' +
       flagBtn +
     '</div>';
@@ -1264,7 +1448,10 @@
 
   // ── Sort picker ────────────────────────────────────────────────────────────
 
-  function openSortPicker() { toolbarFocusIdx = -1; sortPickerOpen = true; sortFocusIdx = SORT_MODES.indexOf(sortMode); if (sortFocusIdx < 0) sortFocusIdx = 0; render(); }
+  function openSortPicker() {
+    if (useFilterSheet()) { openFilterSheet('sort'); return; }
+    toolbarFocusIdx = -1; sortPickerOpen = true; sortFocusIdx = SORT_MODES.indexOf(sortMode); if (sortFocusIdx < 0) sortFocusIdx = 0; render();
+  }
   function closeSortPicker() { sortPickerOpen = false; render(); }
 
   function renderSortPicker() {
@@ -1299,7 +1486,10 @@
 
   // ── Activity picker ────────────────────────────────────────────────────────
 
-  function openActPicker() { toolbarFocusIdx = -1; actPickerOpen = true; actPickerFocusIdx = 0; actPickerZone = 'list'; actPickerFilter = 'all'; actPickerPillIdx = 0; render(); }
+  function openActPicker() {
+    if (useFilterSheet()) { openFilterSheet('act'); return; }
+    toolbarFocusIdx = -1; actPickerOpen = true; actPickerFocusIdx = 0; actPickerZone = 'list'; actPickerFilter = 'all'; actPickerPillIdx = 0; render();
+  }
   function closeActPicker() { actPickerOpen = false; render(); }
 
   function actAddFromPicker() {
@@ -1652,6 +1842,8 @@
         render();
       });
     }
+    var filtBtnEl = document.getElementById('list-filters-btn');
+    if (filtBtnEl) filtBtnEl.addEventListener('click', function() { openFilterSheet(); });
     var sortBtn = document.getElementById('list-sort-btn');
     if (sortBtn) sortBtn.addEventListener('click', openSortPicker);
 
@@ -1704,6 +1896,12 @@
         App.showSaleTally({ returnTo: 'list' });
       });
     }
+    var connBtnEl = document.getElementById('list-conn-btn');
+    if (connBtnEl) {
+      connBtnEl.addEventListener('click', function() {
+        if (App.showConnections) App.showConnections();
+      });
+    }
   }
 
   function focusItem(idx) {
@@ -1724,10 +1922,13 @@
   // ── Toolbar (filter bar) focus ──────────────────────────────────────────────
   // Buttons in order: sort, type-filter, activity, focus, flag
 
-  var TOOLBAR_BTN_IDS = [
-    'list-sort-btn', 'type-filter-btn', 'list-act-btn',
-    'list-density-btn', 'list-group-btn', 'list-focus-btn', 'list-flag-btn',
-  ];
+  function toolbarBtnIds() {
+    var ids = ['list-sell-btn', 'list-conn-btn', 'list-pending-btn'];
+    if (useFilterSheet()) ids.push('list-filters-btn');
+    else ids.push('list-sort-btn', 'type-filter-btn', 'list-act-btn');
+    ids.push('list-density-btn', 'list-group-btn', 'list-focus-btn', 'list-flag-btn');
+    return ids;
+  }
 
   function toolbarEnter() {
     toolbarFocusIdx = 0;
@@ -1736,27 +1937,30 @@
 
   function toolbarBlur() {
     toolbarFocusIdx = -1;
-    TOOLBAR_BTN_IDS.forEach(function(id) {
+    toolbarBtnIds().forEach(function(id) {
       var b = document.getElementById(id);
       if (b) b.classList.remove('tb-focused');
     });
   }
 
   function toolbarMove(dir) {
-    var max = TOOLBAR_BTN_IDS.length - 1;
+    var ids = toolbarBtnIds();
+    var max = ids.length - 1;
     toolbarFocusIdx = Math.max(0, Math.min(max, toolbarFocusIdx + dir));
     toolbarApplyFocus();
   }
 
   function toolbarApplyFocus() {
-    TOOLBAR_BTN_IDS.forEach(function(id, i) {
+    var ids = toolbarBtnIds();
+    ids.forEach(function(id, i) {
       var b = document.getElementById(id);
       if (b) b.classList.toggle('tb-focused', i === toolbarFocusIdx);
     });
   }
 
   function toolbarActivate() {
-    var id = TOOLBAR_BTN_IDS[toolbarFocusIdx];
+    var ids = toolbarBtnIds();
+    var id = ids[toolbarFocusIdx];
     var btn = document.getElementById(id);
     if (btn) btn.click();
     toolbarBlur();
@@ -1869,6 +2073,33 @@
           renderBranchPicker();
           break;
         }
+      }
+      return;
+    }
+    if (filterSheetOpen) {
+      function fsStep(from, dir) {
+        var i = from;
+        for (;;) {
+          i += dir;
+          if (i < 0 || i >= filterSheetRows.length) return from;
+          if (filterSheetRows[i].kind !== 'header') return i;
+        }
+      }
+      switch (key) {
+        case 'ArrowUp':
+          filterSheetFocusIdx = fsStep(filterSheetFocusIdx, -1);
+          renderFilterSheet();
+          break;
+        case 'ArrowDown':
+          filterSheetFocusIdx = fsStep(filterSheetFocusIdx, 1);
+          renderFilterSheet();
+          break;
+        case 'Enter':
+          applyFilterSheetRow();
+          break;
+        case 'Backspace':
+          closeFilterSheet();
+          break;
       }
       return;
     }
@@ -2043,7 +2274,8 @@
         App.showHome();
         break;
       case '3':
-        openTypePicker();
+        if (useFilterSheet()) openFilterSheet();
+        else openTypePicker();
         break;
       case '4':
         App.showLedger();
@@ -2053,6 +2285,11 @@
         break;
       case '6':
         App.showNewEntWizard();
+        break;
+      case '7':
+        sharePendingFilter = !sharePendingFilter;
+        focusIdx = 0;
+        render();
         break;
       case '8':
         App.showSaleTally({ returnTo: 'list' });
@@ -2152,10 +2389,14 @@
 
   function setTypeFilter(rt) {
     if (rt === 'contact') {
-      typeFilter = 'contact';
+      typeFilter = null;
       panelFilter = null;
       focusIdx = 0;
-      openContactBrowser();
+      if (typeof App !== 'undefined' && App.showConnections) {
+        App.showConnections();
+      } else {
+        openContactBrowser();
+      }
       return;
     }
     typeFilter = rt || null;
@@ -2243,6 +2484,9 @@
     setActivityFilter: setActivityFilter,
     setTypeFilter: setTypeFilter,
     setContactFilter: setContactFilter,
+    syncPanelFilters: syncPanelFilters,
+    getListFilters: getListFilters,
+    applyListFilters: applyListFilters,
     itemAt: function(i) { return items[i] || null; },
   };
 

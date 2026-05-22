@@ -5,9 +5,18 @@
   'use strict';
 
   var returnTo     = 'home'; // 'home' | 'list'
+  var tourMode     = false;
   var collapseState  = 0;    // 0=full 1=compact 2=headers-only
   var collapseFocusIdx = 0;
   var searchTerm   = '';
+
+  var TOUR_STEPS = [
+    { title: 'Stall seller', body: 'Settings \u2192 Home: Sell. Open panel \u2192 Quick sell. Pick a product, CSK to record. Key 1 = same qty again; Key 2 = new qty. Key * locks the screen for the counter.' },
+    { title: 'Catalogue', body: 'In Sell mode, CSK on an empty catalogue adds your first product. Build the list you sell every day.' },
+    { title: 'Outcome job', body: 'From Records: key 1 \u2192 Outcome. Type what you need done, pick a contact, Save draft or Share (sharing saves).' },
+    { title: 'Quote \u2192 Invoice', body: 'Open a job: lifecycle strip shows progress. Tap Create Quote / Invoice or the badge. Chain docs list linked records.' },
+    { title: 'Panel money', body: 'Info panel shows four money beats (Billed, Collecting, Receivables, Payables) then full detail. Activity chips filter list + panel together.' },
+  ];
 
   var SECTIONS = [
     {
@@ -156,8 +165,22 @@
 
   // ── Render ───────────────────────────────────────────────────────────────
 
+  function renderTourChecklist() {
+    var html = '<div class="help-tour-checklist"><div class="help-sec-hdr" style="margin-bottom:6px;">Quick start checklist</div>';
+    for (var ti = 0; ti < TOUR_STEPS.length; ti++) {
+      var st = TOUR_STEPS[ti];
+      html += '<div class="help-tour-step">' +
+        '<span class="help-tour-num">' + (ti + 1) + '</span>' +
+        '<div class="help-tour-body"><strong>' + esc(st.title) + '</strong><br>' + esc(st.body) + '</div>' +
+        '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
   function render() {
     var html = '';
+    if (tourMode) html += renderTourChecklist();
     for (var si = 0; si < SECTIONS.length; si++) {
       var sec = SECTIONS[si];
       html += '<div class="help-section" data-sec-idx="' + si + '">';
@@ -284,7 +307,8 @@
   function onShow(opts) {
     opts = opts || {};
     returnTo = opts.returnTo || 'home';
-    collapseState  = opts.tour ? 2 : 0;
+    tourMode = !!opts.tour;
+    collapseState  = opts.tour ? 0 : 0;
     collapseFocusIdx = 0;
     searchTerm   = '';
     var backEl = document.getElementById('help-back-link');

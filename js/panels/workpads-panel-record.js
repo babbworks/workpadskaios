@@ -684,9 +684,16 @@
     }
 
     var isPads = String((rec && (rec.record_class || rec.recordClass || rec.record_type || rec.recordType)) || '').toLowerCase() === 'pads';
-    var stepNames = isPads
-      ? ['Process', 'Actions', 'Details', 'Story']
-      : ['Process', 'Actions', 'Details', 'Story', 'Finance'];
+    var stepNames;
+    if (global.InOutFrame && InOutFrame.enabled() && !isPads) {
+      stepNames = InOutFrame.hasFinancial(rec)
+        ? ['Outcome', 'Inputs', 'Outputs', 'Notes']
+        : ['Outcome', 'Inputs', 'Notes'];
+    } else if (isPads) {
+      stepNames = ['Process', 'Actions', 'Details', 'Story'];
+    } else {
+      stepNames = ['Process', 'Actions', 'Details', 'Story', 'Finance'];
+    }
     var stepName = stepNames[ws] || 'Process';
     RecordService.listChildren(rec.id).then(function(children) {
       var summary = FinancialModel.summarize(rec, children);

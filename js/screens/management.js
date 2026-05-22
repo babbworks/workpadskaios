@@ -40,6 +40,43 @@
     { val: 'custom',   label: 'Custom %'  },
   ];
 
+  function uiPhaseToggleRows() {
+    if (!global.UIPhase || !UIPhase.list) return '';
+    var keys = ['progressive_form', 'in_out_frame', 'capture_lens'];
+    var html = '';
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var item = null;
+      var all = UIPhase.list();
+      for (var j = 0; j < all.length; j++) {
+        if (all[j].key === k) item = all[j];
+      }
+      if (!item) continue;
+      html += '<div class="view-field mgmt-phase-row" data-phase-key="' + esc(k) + '" style="cursor:pointer;">' +
+        '<div class="view-field-label">' + esc(item.label) + '</div>' +
+        '<div class="view-field-value">' +
+          (item.on
+            ? '<span class="badge badge-accent">On</span>'
+            : '<span class="badge">Off</span>') +
+          ' <span style="font-size:10px;color:var(--text-muted);">tap to toggle</span>' +
+        '</div></div>';
+    }
+    return html;
+  }
+
+  function wireUiPhaseToggles() {
+    var rows = document.querySelectorAll('.mgmt-phase-row');
+    for (var i = 0; i < rows.length; i++) {
+      rows[i].addEventListener('click', function() {
+        var key = this.getAttribute('data-phase-key');
+        if (!key || !global.UIPhase) return;
+        if (UIPhase.isOn(key)) UIPhase.disable(key);
+        else UIPhase.enable(key);
+        renderSettings();
+      });
+    }
+  }
+
   function fieldGroup(id, label, value, type) {
     return '<div class="field-group">' +
       '<div class="field-label">' + label + '</div>' +
@@ -539,12 +576,28 @@
       '<div class="view-sec-hdr">Finance overview</div>' +
       finCcySelectRow('mgmt-fin-ccy-1', 'Primary currency', ActivityService.getFinPriority().primary) +
       finCcySelectRow('mgmt-fin-ccy-2', 'Secondary currency', ActivityService.getFinPriority().secondary) +
+      '<div class="view-sec-hdr">Job &amp; connections (IO)</div>' +
+      fieldGroup('mgmt-outcome-label', 'Outcome label',
+        (global.GlobalSynonymsService ? (GlobalSynonymsService.getAll().job || GlobalSynonymsService.canonicalLabel('job')) : 'Outcome')) +
+      '<div class="view-field" id="mgmt-job-inputs-row" style="cursor:pointer;">' +
+        '<div class="view-field-label">Inputs label</div>' +
+        '<div class="view-field-value" id="mgmt-job-inputs-val">' +
+          esc(global.IOLabels ? IOLabels.jobInputsLabel() : 'Job Inputs') +
+          ' <span style="font-size:10px;color:var(--text-muted);">tap: Job \u2192 Work</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="view-field" id="mgmt-connections-row" style="cursor:pointer;">' +
+        '<div class="view-field-label">Connections</div>' +
+        '<div class="view-field-value">Rhythm view (rel-volume) <span class="badge" style="margin-left:6px;">Open</span></div>' +
+      '</div>' +
+      (global.RelVolumeSettings ? RelVolumeSettings.renderSection() : '') +
       '<div class="view-sec-hdr">App</div>' +
+      uiPhaseToggleRows() +
       '<div class="view-field" id="mgmt-home-toggle" style="cursor:pointer;">' +
-        '<div class="view-field-label">Home Screen</div>' +
+        '<div class="view-field-label">Home Screen (boot)</div>' +
         '<div class="view-field-value" id="mgmt-home-val">' +
-          (App.getHomeMode() === 'wp+' ? '<span class="badge badge-accent">WP+</span>' : '<span class="badge">Classic List</span>') +
-          ' <span style="font-size:10px; color:var(--text-muted);">tap to toggle</span>' +
+          '<span class="badge badge-accent" id="mgmt-home-badge">' + esc(App.homeModeLabel(App.getHomeMode())) + '</span>' +
+          ' <span style="font-size:10px; color:var(--text-muted);">tap: List \u2192 WP+ \u2192 Sell</span>' +
         '</div>' +
       '</div>' +
       '<div class="view-field">' +
@@ -563,14 +616,28 @@
     var homeToggle = document.getElementById('mgmt-home-toggle');
     if (homeToggle) {
       homeToggle.addEventListener('click', function() {
-        var next = App.getHomeMode() === 'wp+' ? 'list' : 'wp+';
-        App.setHomeMode(next);
-        var val = document.getElementById('mgmt-home-val');
-        if (val) val.innerHTML = next === 'wp+'
-          ? '<span class="badge badge-accent">WP+</span> <span style="font-size:10px; color:var(--text-muted);">tap to toggle</span>'
-          : '<span class="badge">Classic List</span> <span style="font-size:10px; color:var(--text-muted);">tap to toggle</span>';
+        var next = App.cycleHomeMode();
+        var badge = document.getElementById('mgmt-home-badge');
+        if (badge) badge.textContent = App.homeModeLabel(next);
       });
     }
+
+    wireUiPhaseToggles();
+
+    var jiRow = document.getElementById('mgmt-job-inputs-row');
+    if (jiRow && global.IOLabels) {
+      jiRow.addEventListener('click', function() {
+        var next = IOLabels.jobInputsMode() === 'work' ? 'job' : 'work';
+        IOLabels.setJobInputsMode(next);
+        var v = document.getElementById('mgmt-job-inputs-val');
+        if (v) v.textContent = IOLabels.jobInputsLabel() + ' \u00b7 tap: Job \u2192 Work';
+      });
+    }
+    var connRow = document.getElementById('mgmt-connections-row');
+    if (connRow) {
+      connRow.addEventListener('click', function() { App.showConnections(); });
+    }
+    if (global.RelVolumeSettings) RelVolumeSettings.wire(el.content);
 
     var countryRow = document.getElementById('mgmt-country-row');
     if (countryRow) {
@@ -598,6 +665,12 @@
       ccy2 ? ccy2.value : ''
     );
     ActivityService.update({ name: name, phone: phone });
+    var outcomeInp = document.getElementById('mgmt-outcome-label');
+    if (outcomeInp && global.GlobalSynonymsService) {
+      var ol = outcomeInp.value.trim();
+      GlobalSynonymsService.setOne('job', ol || '');
+    }
+    if (global.RelVolumeSettings) RelVolumeSettings.readFromDom();
     renderSettings();
   }
 

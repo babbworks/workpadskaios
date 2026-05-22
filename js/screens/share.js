@@ -420,7 +420,9 @@
   }
 
   function renderError(msg) {
-    el.content.innerHTML = '<div class="empty-state">Error:<br>' + esc(msg) + '</div>';
+    el.content.innerHTML = global.EmptyState
+      ? EmptyState.render('Share error', { hint: esc(msg) })
+      : '<div class="empty-state">Error:<br>' + esc(msg) + '</div>';
     currentUrl = null;
   }
 
@@ -517,6 +519,7 @@
             App.showView(currentRecord);
           });
         } else {
+          if (App.goBack && App.goBack()) break;
           App.showView(currentRecord);
         }
         break;

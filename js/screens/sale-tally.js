@@ -10,9 +10,10 @@
     lsk: null,
     rsk: null,
     title: null,
+    lockOverlay: null,
   };
 
-  var phase = 'catalogue'; // catalogue | tally | edit
+  var phase = 'catalogue';
   var activityId = '';
   var catalogue = [];
   var focusIdx = 0;
@@ -25,15 +26,39 @@
   var editName = '';
   var editPrice = '';
   var editId = null;
-  var fieldFocus = 0; // tally: 0=qty 1=price 2=buyer; edit: 0=name 1=price
+  var fieldFocus = 0;
   var returnTo = 'list';
   var saving = false;
+  var screenLocked = false;
 
-  function outcomeLabel() {
-    if (global.GlobalSynonymsService) {
-      return GlobalSynonymsService.resolve('job', null) || 'Outcome';
+  function screenLockEnabled() {
+    return !global.UIPhase || UIPhase.isOn('sale_screen_lock');
+  }
+  var sessionTotal = 0;
+  var sessionCount = 0;
+
+  function sessionKey() {
+    return 'wp_sale_session_' + todayStr() + '_' + (activityId || '_default');
+  }
+
+  function loadSession() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(sessionKey()) || '{}');
+      sessionTotal = parseFloat(raw.total || 0) || 0;
+      sessionCount = parseInt(raw.count || 0, 10) || 0;
+    } catch (_) {
+      sessionTotal = 0;
+      sessionCount = 0;
     }
-    return 'Outcome';
+  }
+
+  function addSession(amount) {
+    sessionTotal += amount;
+    sessionCount += 1;
+    localStorage.setItem(sessionKey(), JSON.stringify({
+      total: sessionTotal,
+      count: sessionCount,
+    }));
   }
 
   function todayStr() {
@@ -58,11 +83,31 @@
     catalogue = SaleCatalogue.list(activityId);
   }
 
+  function setLockUI() {
+    if (el.lockOverlay) {
+      el.lockOverlay.style.display = screenLocked ? 'flex' : 'none';
+      el.lockOverlay.setAttribute('aria-hidden', screenLocked ? 'false' : 'true');
+    }
+  }
+
+  function toggleLock() {
+    if (!screenLockEnabled()) return;
+    screenLocked = !screenLocked;
+    localStorage.setItem('wp_sale_screen_lock', screenLocked ? '1' : '');
+    setLockUI();
+  }
+
   function setSoftkeys() {
+    if (screenLocked) {
+      if (el.lsk) el.lsk.textContent = '';
+      if (el.csk) el.csk.textContent = '';
+      if (el.rsk) el.rsk.textContent = '';
+      return;
+    }
     if (phase === 'catalogue') {
       if (el.lsk) el.lsk.textContent = 'Back';
-      if (el.csk) el.csk.textContent = 'Add item';
-      if (el.rsk) el.rsk.textContent = '';
+      if (el.csk) el.csk.textContent = 'Add';
+      if (el.rsk) el.rsk.textContent = focusIdx < catalogue.length && catalogue[focusIdx] ? 'Edit' : '';
     } else if (phase === 'tally') {
       if (el.lsk) el.lsk.textContent = 'Back';
       if (el.csk) el.csk.textContent = 'Record';
@@ -70,8 +115,17 @@
     } else {
       if (el.lsk) el.lsk.textContent = 'Cancel';
       if (el.csk) el.csk.textContent = 'Save';
-      if (el.rsk) el.rsk.textContent = '';
+      if (el.rsk) el.rsk.textContent = editId ? 'Delete' : '';
     }
+  }
+
+  function sessionBarHtml() {
+    if (sessionCount < 1) return '';
+    var cur = ActivityService.getLocale().currency;
+    return '<div class="sale-session-bar">' +
+      'Today: ' + esc(CurrencyUtil.fmt(sessionTotal, cur)) +
+      ' \u00b7 ' + sessionCount + ' sale' + (sessionCount === 1 ? '' : 's') +
+    '</div>';
   }
 
   function renderCatalogue() {
@@ -81,7 +135,9 @@
 
     var rows = '';
     if (!catalogue.length) {
-      rows = '<div class="empty-state" style="padding:12px;">No items yet.<br>CSK to add first product.</div>';
+      rows = global.EmptyState
+        ? EmptyState.render('No items yet', { hint: 'Add what you sell at this stall.', action: 'CSK — add first product' })
+        : '<div class="empty-state" style="padding:12px;">No items yet.<br>CSK to add first product.</div>';
     } else {
       for (var i = 0; i < catalogue.length; i++) {
         var it = catalogue[i];
@@ -94,14 +150,15 @@
     }
 
     el.content.innerHTML =
+      sessionBarHtml() +
       '<div class="sale-hdr">What do you sell?</div>' +
+      '<div class="sale-hint">* lock stall \u00b7 RSK edit item</div>' +
       rows +
       '<div class="sale-cat-row sale-cat-add' + (focusIdx === catalogue.length ? ' focused' : '') + '" data-idx="' + catalogue.length + '">' +
         '<span class="sale-cat-name">+ Add item</span>' +
       '</div>';
 
     bindCatalogueRows();
-    if (el.title) el.title.textContent = 'Sell';
   }
 
   function bindCatalogueRows() {
@@ -132,6 +189,7 @@
     buyer = '';
     phase = 'tally';
     fieldFocus = 0;
+    focusIdx = -1;
     renderTally();
   }
 
@@ -149,7 +207,8 @@
       : '';
 
     el.content.innerHTML =
-      '<div class="sale-tally-total">' + esc(CurrencyUtil.fmtFlat(total, cur)) + '</div>' +
+      sessionBarHtml() +
+      '<div class="sale-tally-total">' + esc(CurrencyUtil.fmt(total, cur)) + '</div>' +
       '<div class="field-group' + (fieldFocus === 0 ? ' field-focused' : '') + '">' +
         '<div class="field-label">Qty</div>' +
         '<input class="field-input" id="sale-qty" type="tel" inputmode="numeric" value="' + esc(qty) + '">' +
@@ -162,7 +221,8 @@
       '<div class="sale-action-row">' +
         '<span class="sale-act-btn' + (focusIdx === 0 ? ' focused' : '') + '" data-act="another">Another</span>' +
         '<span class="sale-act-btn' + (focusIdx === 1 ? ' focused' : '') + '" data-act="newqty">New qty</span>' +
-      '</div>';
+      '</div>' +
+      '<div class="sale-hint">1 same qty \u00b7 2 new qty \u00b7 * lock</div>';
 
     var q = document.getElementById('sale-qty');
     var p = document.getElementById('sale-price');
@@ -176,24 +236,20 @@
       acts[i].addEventListener('click', function() {
         var a = this.getAttribute('data-act');
         if (a === 'another') recordSale(true);
-        else if (a === 'newqty') { fieldFocus = 0; focusIdx = -1; var inp = document.getElementById('sale-qty'); if (inp) inp.focus(); }
+        else if (a === 'newqty') {
+          fieldFocus = 0;
+          focusIdx = -1;
+          var inp = document.getElementById('sale-qty');
+          if (inp) inp.focus();
+        }
       });
     }
-    focusIdx = -1;
-    bindFieldFocus();
   }
 
   function refreshTallyTotal() {
     var node = el.content.querySelector('.sale-tally-total');
     if (node) {
       node.textContent = CurrencyUtil.fmt(lineTotal(), ActivityService.getLocale().currency);
-    }
-  }
-
-  function bindFieldFocus() {
-    var groups = el.content.querySelectorAll('.field-group');
-    for (var i = 0; i < groups.length; i++) {
-      groups[i].classList.toggle('field-focused', i === fieldFocus);
     }
   }
 
@@ -208,7 +264,8 @@
       '<div class="field-group' + (fieldFocus === 1 ? ' field-focused' : '') + '">' +
         '<div class="field-label">Default price</div>' +
         '<input class="field-input" id="sale-edit-price" type="tel" value="' + esc(editPrice) + '">' +
-      '</div>';
+      '</div>' +
+      (editId ? '<div class="sale-hint">RSK deletes this catalogue item</div>' : '');
     var n = document.getElementById('sale-edit-name');
     var p = document.getElementById('sale-edit-price');
     if (n) n.addEventListener('input', function() { editName = n.value; });
@@ -228,8 +285,16 @@
     });
     loadCatalogue();
     phase = 'catalogue';
-    focusIdx = catalogue.length - 1;
-    if (focusIdx < 0) focusIdx = 0;
+    focusIdx = Math.max(0, catalogue.length - 1);
+    renderCatalogue();
+  }
+
+  function deleteCatalogueItem() {
+    if (!editId) return;
+    SaleCatalogue.removeItem(activityId, editId);
+    loadCatalogue();
+    phase = 'catalogue';
+    focusIdx = Math.min(focusIdx, Math.max(0, catalogue.length - 1));
     renderCatalogue();
   }
 
@@ -264,6 +329,8 @@
 
     RecordService.create(fields).then(function(rec) {
       saving = false;
+      if (global.SocialLedger) SocialLedger.onSaleConfirmed(rec);
+      addSession(total);
       if (stayOnTally) {
         renderTally();
         return;
@@ -281,9 +348,12 @@
     activityId = opts.activityId || (act ? act.id : '');
     phase = opts.itemId ? 'tally' : 'catalogue';
     fullMode = !!localStorage.getItem('wp_sale_full_mode');
+    screenLocked = screenLockEnabled() && !!localStorage.getItem('wp_sale_screen_lock');
     loadCatalogue();
+    loadSession();
     focusIdx = 0;
     selectedItem = null;
+    setLockUI();
 
     if (opts.itemId) {
       selectedItem = SaleCatalogue.getItem(activityId, opts.itemId);
@@ -299,6 +369,7 @@
   }
 
   function goBack() {
+    if (screenLocked) return;
     if (phase === 'tally') {
       phase = 'catalogue';
       focusIdx = 0;
@@ -310,11 +381,32 @@
       renderCatalogue();
       return;
     }
+    if (App.goBack && App.goBack()) return;
     if (returnTo === 'home') App.showHome();
     else App.showList();
   }
 
+  function openEditFocusedItem() {
+    if (focusIdx >= catalogue.length || focusIdx < 0) return;
+    phase = 'edit';
+    editId = catalogue[focusIdx].id;
+    editName = catalogue[focusIdx].name;
+    editPrice = catalogue[focusIdx].price;
+    fieldFocus = 0;
+    renderEdit();
+  }
+
+  function onStarKey() {
+    toggleLock();
+  }
+
   function onKey(key) {
+    if (key === '*') {
+      if (screenLockEnabled()) toggleLock();
+      return;
+    }
+    if (screenLocked) return;
+
     if (phase === 'catalogue') {
       var max = catalogue.length;
       switch (key) {
@@ -332,27 +424,16 @@
           goBack();
           break;
         case 'SoftRight':
-        case '1':
-          if (catalogue[focusIdx] && focusIdx < catalogue.length) {
-            phase = 'edit';
-            editId = catalogue[focusIdx].id;
-            editName = catalogue[focusIdx].name;
-            editPrice = catalogue[focusIdx].price;
-            fieldFocus = 0;
-            renderEdit();
+          openEditFocusedItem();
+          break;
+        case '3':
+          if (focusIdx < catalogue.length) {
+            SaleCatalogue.removeItem(activityId, catalogue[focusIdx].id);
+            loadCatalogue();
+            focusIdx = Math.min(focusIdx, catalogue.length);
+            renderCatalogue();
           }
           break;
-        default:
-          if (key === '2' || key === 'SoftRight') { /* add via csk */ }
-          break;
-      }
-      if (key === 'SoftRight' && focusIdx < catalogue.length && catalogue[focusIdx]) {
-        phase = 'edit';
-        editId = catalogue[focusIdx].id;
-        editName = catalogue[focusIdx].name;
-        editPrice = catalogue[focusIdx].price;
-        fieldFocus = 0;
-        renderEdit();
       }
       return;
     }
@@ -369,12 +450,16 @@
           break;
         case 'Enter':
         case 'SoftRight':
-          saveCatalogueItem();
+          if (key === 'SoftRight' && editId) deleteCatalogueItem();
+          else saveCatalogueItem();
           break;
         case 'SoftLeft':
         case 'Backspace':
           phase = 'catalogue';
           renderCatalogue();
+          break;
+        case '3':
+          if (editId) deleteCatalogueItem();
           break;
       }
       return;
@@ -383,12 +468,14 @@
     if (phase === 'tally') {
       switch (key) {
         case 'ArrowUp':
-          if (fieldFocus > 0) { fieldFocus--; bindFieldFocus(); }
-          else if (focusIdx > 0) { focusIdx--; renderTally(); }
+          if (fieldFocus > 0) fieldFocus--;
+          else if (focusIdx > 0) focusIdx--;
+          renderTally();
           break;
         case 'ArrowDown':
-          if (fieldFocus < (fullMode ? 2 : 1)) { fieldFocus++; bindFieldFocus(); }
-          else if (focusIdx < 1) { focusIdx++; renderTally(); }
+          if (fieldFocus < (fullMode ? 2 : 1)) fieldFocus++;
+          else if (focusIdx < 1) focusIdx++;
+          renderTally();
           break;
         case 'SoftRight':
           fullMode = !fullMode;
@@ -401,8 +488,15 @@
           break;
         case 'Enter':
           if (focusIdx === 0) recordSale(true);
-          else if (focusIdx === 1) { fieldFocus = 0; focusIdx = -1; renderTally(); var inp = document.getElementById('sale-qty'); if (inp) inp.focus(); }
-          else recordSale(false);
+          else if (focusIdx === 1) {
+            fieldFocus = 0;
+            focusIdx = -1;
+            renderTally();
+            setTimeout(function() {
+              var inp = document.getElementById('sale-qty');
+              if (inp) inp.focus();
+            }, 40);
+          } else recordSale(false);
           break;
         case '1':
           recordSale(true);
@@ -421,6 +515,7 @@
   }
 
   function onCsk() {
+    if (screenLocked) return;
     if (phase === 'catalogue') {
       phase = 'edit';
       editId = null;
@@ -440,15 +535,17 @@
   function init() {
     el.content = document.getElementById('sale-tally-content');
     el.csk = document.getElementById('sale-tally-csk');
+    el.rsk = document.getElementById('sale-tally-rsk');
     el.lsk = document.querySelector('#screen-sale-tally .sk-lsk');
-    el.rsk = document.querySelector('#screen-sale-tally .sk-rsk');
     el.title = document.getElementById('sale-tally-title');
+    el.lockOverlay = document.getElementById('sale-lock-overlay');
   }
 
   global.SaleTallyScreen = {
     onShow: onShow,
     onKey: onKey,
     onCsk: onCsk,
+    onStarKey: onStarKey,
     init: init,
   };
 

@@ -7,6 +7,18 @@
 
   var PREFIX = 'wp_ui_phase_';
 
+  // R1/R2 default on when unset (disable via UIPhase.disable)
+  var DEFAULT_ON = {
+    nav_stack: true,
+    filter_sheet: true,
+    work_surface: true,
+    lifecycle_strip: true,
+    money_four: true,
+    sale_screen_lock: true,
+    progressive_form: true,
+    capture_lens: true,
+  };
+
   var FLAGS = {
     nav_stack: {
       label: 'R1: Unified navigation stack',
@@ -28,9 +40,25 @@
       label: 'R3–R6: Sale calculator + catalogue',
       legacy: 'No dedicated sale surface',
     },
+    lifecycle_strip: {
+      label: 'R3: Lifecycle strip + chain docs on view',
+      legacy: 'Progression badge only',
+    },
+    money_four: {
+      label: 'R4: Four money beats on panel summary',
+      legacy: 'Full finance summary list only',
+    },
+    progressive_form: {
+      label: 'R7: Progressive form (outcome-first wizard)',
+      legacy: 'All PADS tabs visible from start',
+    },
     in_out_frame: {
       label: 'R7: In/Out UI frame (codec unchanged)',
-      legacy: 'PADS section layout only',
+      legacy: 'PADS P/A/D/S/F section layout',
+    },
+    capture_lens: {
+      label: 'R7: Words / Numbers capture lenses in wizard',
+      legacy: 'All fields visible at once',
     },
     sale_screen_lock: {
       label: 'R5: Market screen lock for sale mode',
@@ -43,7 +71,9 @@
   };
 
   function isOn(key) {
-    return localStorage.getItem(PREFIX + key) === '1';
+    var v = localStorage.getItem(PREFIX + key);
+    if (v === null) return !!DEFAULT_ON[key];
+    return v === '1';
   }
 
   function enable(key) {
@@ -72,7 +102,7 @@
   }
 
   function onBoot() {
-    // R1+: NavStack.restore(), share_pending tag hooks, etc.
+    if (global.NavStack && NavStack.initCrumbBar) NavStack.initCrumbBar();
   }
 
   global.UIPhase = {

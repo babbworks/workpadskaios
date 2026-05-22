@@ -110,74 +110,10 @@
   var LIAB_TYPES = { payable: true, receivable: true, loan: true };
 
   function computeAggregate(summaries, liabTotals, liabByc) {
-    liabTotals = liabTotals || { payables: 0, receivables: 0, loansOwing: 0, loansOwed: 0 };
-    liabByc    = liabByc    || {};
-    var billed = 0, collected = 0, receivables = 0, sales = 0;
-    var totalCharges = 0, totalTaxes = 0;
-    var totalExpenses = 0, billableExp = 0, realJobCosts = 0;
-    var count = summaries.length;
-    var profileCur = '';
-    if (typeof ActivityService !== 'undefined') {
-      profileCur = (ActivityService.getLocale().currency || '').toUpperCase();
+    if (global.FinanceAggregate) {
+      return FinanceAggregate.computeAggregate(summaries, liabTotals, liabByc);
     }
-
-    var byc = {};
-
-    for (var i = 0; i < summaries.length; i++) {
-      var s   = summaries[i];
-      var cur = s._currency || 'unknown';
-      var inProfile = !profileCur || cur === profileCur;
-      if (inProfile) {
-        billed       += s.price;
-        collected    += s.paidTotal;
-        if (s.outstanding > 0) receivables += s.outstanding;
-        if (s._recordType === 'invoice') sales += s.price;
-        totalCharges += s.total;
-        totalTaxes   += s.tax;
-        billableExp  += s.billedTotal;
-        realJobCosts += s.cogsTotal;
-        totalExpenses += s.billedTotal + s.cogsTotal;
-      }
-
-      CurrencyUtil.addKeyed(byc, cur, 'billed',    s.price);
-      CurrencyUtil.addKeyed(byc, cur, 'collected', s.paidTotal);
-      if (s.outstanding > 0) CurrencyUtil.addKeyed(byc, cur, 'receivables', s.outstanding);
-      CurrencyUtil.addKeyed(byc, cur, 'expenses',  s.billedTotal + s.cogsTotal);
-    }
-    // Merge liability buckets into byc
-    Object.keys(liabByc).forEach(function(cur) {
-      var lb = liabByc[cur];
-      if (lb.payables)    CurrencyUtil.addKeyed(byc, cur, 'payables',    lb.payables);
-      if (lb.receivables) CurrencyUtil.addKeyed(byc, cur, 'receivables', lb.receivables);
-      if (lb.loansOwing)  CurrencyUtil.addKeyed(byc, cur, 'loansOwing',  lb.loansOwing);
-      if (lb.loansOwed)   CurrencyUtil.addKeyed(byc, cur, 'loansOwed',   lb.loansOwed);
-    });
-
-    receivables += liabTotals.receivables;
-    var payables    = liabTotals.payables;
-    var loansOwing  = liabTotals.loansOwing;
-    var loansOwed   = liabTotals.loansOwed;
-    var loans       = loansOwing - loansOwed;
-    var rpl         = receivables - payables - loansOwing;
-    var jobCostMargin  = billed > 0 ? (billed - billableExp) / billed * 100 : 0;
-    var totalJobMargin = billed > 0 ? (billed - totalExpenses) / billed * 100 : 0;
-    var grossMarginPct = billed > 0 ? (billed - billableExp - realJobCosts) / billed * 100 : 0;
-    var netMarginPct   = billed > 0 ? (billed - totalExpenses) / billed * 100 : 0;
-    return {
-      billed: billed, collected: collected, receivables: receivables, sales: sales,
-      payables: payables, loans: loans, loansOwing: loansOwing, loansOwed: loansOwed,
-      rpl: rpl, rp: receivables - payables,
-      totalCharges: totalCharges, jobCharges: billed, totalTaxes: totalTaxes,
-      totalExpenses: totalExpenses, billableExpenses: billableExp,
-      realJobCosts: realJobCosts, operatingCosts: 0,
-      jobCostMargin: jobCostMargin, totalJobMargin: totalJobMargin,
-      estJobCosts: 0, actJobCosts: realJobCosts, jobCostSplit: realJobCosts,
-      estOpCosts: 0, actOpCosts: 0, opCostSplit: 0,
-      operatingMargin: 0, grossMarginPct: grossMarginPct, netMarginPct: netMarginPct,
-      expenseRatio: billed > 0 ? totalExpenses / billed * 100 : 0,
-      avgRevPerJob: count > 0 ? billed / count : 0,
-      byc: byc,
-    };
+    return { billed: 0, collected: 0, receivables: 0, sales: 0, byc: {} };
   }
 
   function loadBrowseAgg(currency, callback) {
@@ -210,6 +146,7 @@
         ch = childMap[r.id] || [];
         s = FinancialModel.summarize(r, ch);
         s._currency = cur;
+        s._recordType = rt;
         jobs.push(s);
       }
 
@@ -234,6 +171,38 @@
     '</div>';
   }
 
+  function browseActionLine(action, label, valHtml) {
+    return '<div class="pb-sl nav" data-action="' + esc(action) + '">' +
+      '<span class="pb-sll">' + esc(label) + '</span>' +
+      valHtml + '<span class="pb-sla">\u203a</span>' +
+    '</div>';
+  }
+
+  function bindSummaryNavHandlers(root) {
+    if (!root || !root.querySelectorAll) return;
+    var navEls = root.querySelectorAll('.pb-sl.nav');
+    for (var i = 0; i < navEls.length; i++) {
+      (function(el) {
+        if (el._summaryBound) return;
+        el._summaryBound = true;
+        el.addEventListener('click', function() {
+          var action = el.getAttribute('data-action');
+          if (action === 'sell-tally' && typeof App !== 'undefined') {
+            S.close();
+            App.showSaleTally({ returnTo: (App.getCurrentScreen && App.getCurrentScreen()) || 'list' });
+            return;
+          }
+          var filter = el.getAttribute('data-filter');
+          if (filter && typeof ListScreen !== 'undefined' && typeof App !== 'undefined') {
+            S.close();
+            ListScreen.setFilter(filter);
+            App.showList();
+          }
+        });
+      })(navEls[i]);
+    }
+  }
+
   function browseDispLine(label, valHtml, labelNeg, labelMute) {
     return '<div class="pb-sl">' +
       '<span class="pb-sll' + (labelNeg ? ' neg' : '') + (labelMute ? ' mute' : '') + '">' + esc(label) + '</span>' +
@@ -243,6 +212,30 @@
 
   function browseParentLine(label, valHtml) {
     return '<div class="pb-sl-parent"><span class="pb-sll">' + esc(label) + '</span>' + valHtml + '</div>';
+  }
+
+  function renderMoneyFour(agg, currency) {
+    if (global.UIPhase && !UIPhase.isOn('money_four')) return '';
+    if (!agg) return '';
+    var byc = agg.byc || {};
+    function mv(v, cls, field) {
+      var str = (field && Object.keys(byc).length)
+        ? CurrencyUtil.fmtKeyed(byc, field)
+        : S.money(currency, v);
+      return '<span class="pb-slv ' + (cls || '') + '">' + str + '</span>';
+    }
+    function beat(lbl, valHtml) {
+      return '<div class="pb-mf-row"><span class="pb-mf-lbl">' + esc(lbl) + '</span>' + valHtml + '</div>';
+    }
+    return (
+      '<div class="pb-money-four">' +
+        '<div class="pb-mf-title">Money</div>' +
+        beat('Billed',       mv(agg.billed,      'pos',  'billed')) +
+        beat('Collecting',   mv(agg.collected,   'pos',  'collected')) +
+        beat('Receivables',  mv(agg.receivables, 'warn', 'receivables')) +
+        beat('Payables',     mv(agg.payables,    'neg',  'payables')) +
+      '</div>'
+    );
   }
 
   function renderBrowseSummaryLines(agg, currency) {
@@ -259,9 +252,13 @@
     }
     function pv(v) { return '<span class="pb-slv pos">' + S.pct(v) + '</span>'; }
     var sep = '<div class="pb-sep"></div>';
+    var four = renderMoneyFour(agg, currency);
     return (
+      four +
+      (four ? sep : '') +
       S.browseNavLine('billed',            'Billed',           mv(agg.billed,           'pos',  'billed')) +
       S.browseNavLine('sales',             'Sales',            mv(agg.sales || 0,       'pos',  'billed')) +
+      S.browseActionLine('sell-tally',     'Quick sell',       '<span class="pb-slv pos">Sell</span>') +
       S.browseNavLine('collected',         'Collecting',        mv(agg.collected,        'pos',  'collected')) +
       S.browseNavLine('receivables',       'Receivables',       mv(agg.receivables,      'warn', 'receivables')) +
       S.browseNavLine('payables',          'Payables',          mv(agg.payables,         'neg',  'payables'), true) +
@@ -545,28 +542,34 @@
     if (x) x.addEventListener('click', function() { S.browseActivities = []; S.browseChipsOn = false; S.renderListPanel(); });
     // Live-refresh summary totals when activity filter changes
     S.browseAgg = null;
+    if (global.UIPhase && UIPhase.isOn('work_surface') &&
+        typeof ListScreen !== 'undefined' && ListScreen.syncPanelFilters) {
+      ListScreen.syncPanelFilters({
+        activities: S.browseActivities.slice(),
+        panel: (typeof ListScreen.getListFilters === 'function')
+          ? (ListScreen.getListFilters().panel || null) : null,
+      });
+    }
     var locale2 = ActivityService.getLocale();
     S.loadBrowseAgg(locale2.currency, function(agg) {
       var sumEl = document.getElementById('pb-summary');
       if (sumEl) {
         sumEl.innerHTML = S.renderBrowseSummaryLines(agg, locale2.currency);
-        var navEls2 = sumEl.querySelectorAll('.pb-sl.nav');
-        for (var ni2 = 0; ni2 < navEls2.length; ni2++) {
-          navEls2[ni2].addEventListener('click', (function(row) {
-            return function() {
-              var filter = row.getAttribute('data-filter');
-              if (filter && typeof ListScreen !== 'undefined' && typeof App !== 'undefined') {
-                S.close(); ListScreen.setFilter(filter); App.showList();
-              }
-            };
-          })(navEls2[ni2]));
-        }
+        bindSummaryNavHandlers(sumEl);
       }
     });
   }
 
   function renderListPanel() {
     if (S.datePickerOpen) { S.renderDatePicker(); return; }
+    if (global.UIPhase && UIPhase.isOn('work_surface') &&
+        typeof ListScreen !== 'undefined' && ListScreen.getListFilters) {
+      var lf = ListScreen.getListFilters();
+      if (lf.activities && lf.activities.length) {
+        S.browseActivities = lf.activities.slice();
+        S.browseChipsOn = true;
+      }
+    }
     var locale = ActivityService.getLocale();
     var act    = ActivityService.getActive();
     var name   = act ? (act.name || 'there') : 'there';
@@ -602,8 +605,7 @@
       btnContacts._wBound = true;
       btnContacts.addEventListener('click', function() {
         S.close();
-        if (typeof ListScreen !== 'undefined') ListScreen.setTypeFilter('contact');
-        App.showList();
+        App.showConnections();
       });
     }
     var btnSwitch = document.getElementById('pb-btn-switch');
@@ -629,6 +631,9 @@
     S.el.content.style.cssText = 'padding:0;overflow:hidden;display:flex;flex-direction:column;';
     S.el.content.innerHTML =
       '<div class="pb-controls" id="pb-controls">' +
+        '<div class="pb-qc-row pb-qc-row-sell">' +
+          '<div class="pb-qc pb-qc-sell" data-qc="sell">Sell</div>' +
+        '</div>' +
         '<div class="pb-qc-row">' +
           '<div class="pb-qc pb-qc-exp"  data-qc="out">Exp</div>' +
           '<div class="pb-qc pb-qc-cogs" data-qc="cogs">COGS</div>' +
@@ -697,18 +702,7 @@
       })(qcEls[qi]));
     }
 
-    // Summary line click handlers
-    var navEls = S.el.content.querySelectorAll('.pb-sl.nav');
-    for (var ni = 0; ni < navEls.length; ni++) {
-      navEls[ni].addEventListener('click', (function(row) {
-        return function() {
-          var filter = row.getAttribute('data-filter');
-          if (filter && typeof ListScreen !== 'undefined' && typeof App !== 'undefined') {
-            S.close(); ListScreen.setFilter(filter); App.showList();
-          }
-        };
-      })(navEls[ni]));
-    }
+    bindSummaryNavHandlers(S.el.content);
 
     S.buildBrowseFocusables();
     S.applyBrowseFocus();
@@ -718,18 +712,7 @@
       var sumEl = document.getElementById('pb-summary');
       if (sumEl) {
         sumEl.innerHTML = S.renderBrowseSummaryLines(agg, currency);
-        // Re-bind summary click handlers
-        var newNavEls = sumEl.querySelectorAll('.pb-sl.nav');
-        for (var nni = 0; nni < newNavEls.length; nni++) {
-          newNavEls[nni].addEventListener('click', (function(row) {
-            return function() {
-              var filter = row.getAttribute('data-filter');
-              if (filter && typeof ListScreen !== 'undefined' && typeof App !== 'undefined') {
-                S.close(); ListScreen.setFilter(filter); App.showList();
-              }
-            };
-          })(newNavEls[nni]));
-        }
+        bindSummaryNavHandlers(sumEl);
         S.buildBrowseFocusables();
         S.applyBrowseFocus();
       }
@@ -925,6 +908,12 @@
         return true;
       }
       if (f.type === 'summary') {
+        var action = f.el.getAttribute('data-action');
+        if (action === 'sell-tally' && typeof App !== 'undefined') {
+          S.close();
+          App.showSaleTally({ returnTo: (App.getCurrentScreen && App.getCurrentScreen()) || 'list' });
+          return true;
+        }
         var filter = f.el.getAttribute('data-filter');
         if (filter && typeof ListScreen !== 'undefined' && typeof App !== 'undefined') {
           S.close(); ListScreen.setFilter(filter); App.showList();
@@ -943,6 +932,8 @@
     S.computeAggregate = computeAggregate;
     S.loadBrowseAgg = loadBrowseAgg;
     S.browseNavLine = browseNavLine;
+    S.browseActionLine = browseActionLine;
+    S.bindSummaryNavHandlers = bindSummaryNavHandlers;
     S.browseDispLine = browseDispLine;
     S.browseParentLine = browseParentLine;
     S.renderBrowseSummaryLines = renderBrowseSummaryLines;

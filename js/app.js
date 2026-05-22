@@ -14,6 +14,8 @@
     'user-switcher':   document.getElementById('screen-user-switcher'),
     'sale-tally':      document.getElementById('screen-sale-tally'),
     'io-create':       document.getElementById('screen-io-create'),
+    'io-record':       document.getElementById('screen-io-record'),
+    connections:       document.getElementById('screen-connections'),
     list:              document.getElementById('screen-list'),
     wizard:            document.getElementById('screen-wizard'),
     view:              document.getElementById('screen-view'),
@@ -37,10 +39,26 @@
   var currentScreen = 'list';
 
   // ── Home mode preference ───────────────────────────────────────────────────
-  // 'wp+' boots to WP+ home; anything else boots to classic list
+  // 'list' | 'wp+' | 'sell' — boot target after onboarding
+
+  var HOME_MODES = ['list', 'wp+', 'sell'];
 
   function getHomeMode() { return localStorage.getItem('wp_home_mode') || 'list'; }
   function setHomeMode(mode) { localStorage.setItem('wp_home_mode', mode); }
+
+  function cycleHomeMode() {
+    var cur = getHomeMode();
+    var idx = HOME_MODES.indexOf(cur);
+    var next = HOME_MODES[(idx + 1) % HOME_MODES.length];
+    setHomeMode(next);
+    return next;
+  }
+
+  function homeModeLabel(mode) {
+    if (mode === 'wp+') return 'WP+ Home';
+    if (mode === 'sell') return 'Sell (tally)';
+    return 'Classic List';
+  }
 
   // ── Shortcut maps (per screen) ─────────────────────────────────────────────
 
@@ -52,6 +70,7 @@
       { key: '4', label: 'New Exp/COGS/Inc' },
       { key: '5', label: 'Manage' },
       { key: '6', label: 'New Business' },
+      { key: '7', label: 'Share pending filter' },
       { key: '8', label: 'Sell (quick tally)' },
       { key: '9', label: 'Finance overview' },
       { key: '0', label: 'Quick note' },
@@ -127,6 +146,59 @@
   var receiveNoteOpen = false;
   var receiveNoteObj  = null;
 
+  // ── Navigation stack (R1) ───────────────────────────────────────────────────
+
+  function navPush(screen, opts) {
+    if (typeof NavStack !== 'undefined' && NavStack.enabled() && !(opts && opts._navPop)) {
+      NavStack.push(screen, opts || {});
+    }
+  }
+
+  function goBack() {
+    if (typeof NavStack === 'undefined' || !NavStack.canPop()) return false;
+    var prev = NavStack.pop();
+    if (!prev) return false;
+    var o = prev.opts || {};
+    o._navPop = true;
+    routeNavScreen(prev.screen, o);
+    return true;
+  }
+
+  function routeNavScreen(screen, opts) {
+    opts = opts || {};
+    if (opts._navPop) delete opts._navPop;
+    switch (screen) {
+      case 'home':              showHome(); break;
+      case 'list':              showList(opts); break;
+      case 'view':              if (opts.recordId) {
+        RecordService.get(opts.recordId).then(function(r) {
+          if (r) showView(r, { _navPop: true }); else showList(opts);
+        });
+      } else showList(opts); break;
+      case 'wizard':            showWizard(opts.record || null, opts); break;
+      case 'sale-tally':        showSaleTally(opts); break;
+      case 'io-create':         showIOCreate(opts); break;
+      case 'io-record':         showIORecord(opts); break;
+      case 'connections':       showConnections(opts); break;
+      case 'share':             if (opts.recordId) {
+        RecordService.get(opts.recordId).then(function(r) {
+          if (r) { opts._navPop = true; showShare(r); } else showList(opts);
+        });
+      } else showList(opts); break;
+      case 'financial':         if (opts.recordId) {
+        RecordService.get(opts.recordId).then(function(r) {
+          if (r) showFinancial(r, { _navPop: true }); else showList(opts);
+        });
+      } else showList(opts); break;
+      case 'finance-overview':  showFinanceOverview(); break;
+      case 'management':        showManagement(opts); break;
+      case 'help':              showHelp(opts); break;
+      case 'ledger':            showLedger(opts); break;
+      case 'liabilities':       showLiabilities(opts); break;
+      default:                  showList(opts); break;
+    }
+  }
+
   // ── Screen transitions ─────────────────────────────────────────────────────
 
   function showScreen(name) {
@@ -136,14 +208,21 @@
       SCREENS[keys[i]].classList.toggle('active', keys[i] === name);
     }
     currentScreen = name;
+    if (typeof NavStack !== 'undefined' && NavStack.syncScreenTitle) {
+      NavStack.syncScreenTitle(name);
+    }
   }
 
   function showHelp(opts) {
+    opts = opts || {};
+    if (!opts._navPop) navPush('help', opts);
+    if (opts._navPop) delete opts._navPop;
     showScreen('help');
-    HelpScreen.onShow(opts || {});
+    HelpScreen.onShow(opts);
   }
 
   function showHome() {
+    navPush('home', {});
     showScreen('home');
     HomeScreen.onShow();
     if (typeof WorkpadsPanel !== 'undefined') {
@@ -152,18 +231,43 @@
   }
 
   function showList(opts) {
+    opts = opts || {};
+    if (!opts._navPop && !opts.restoreNav) navPush('list', opts);
+    if (opts._navPop) delete opts._navPop;
     showScreen('list');
-    ListScreen.onShow(opts || null);
+    ListScreen.onShow(opts);
   }
 
   function showSaleTally(opts) {
+    opts = opts || {};
+    if (!opts._navPop) navPush('sale-tally', opts);
+    if (opts._navPop) delete opts._navPop;
     showScreen('sale-tally');
-    if (SaleTallyScreen && SaleTallyScreen.onShow) SaleTallyScreen.onShow(opts || {});
+    if (SaleTallyScreen && SaleTallyScreen.onShow) SaleTallyScreen.onShow(opts);
   }
 
   function showIOCreate(opts) {
+    opts = opts || {};
+    if (!opts._navPop) navPush('io-create', opts);
+    if (opts._navPop) delete opts._navPop;
     showScreen('io-create');
-    if (IOCreateScreen && IOCreateScreen.onShow) IOCreateScreen.onShow(opts || {});
+    if (IOCreateScreen && IOCreateScreen.onShow) IOCreateScreen.onShow(opts);
+  }
+
+  function showIORecord(opts) {
+    opts = opts || {};
+    if (!opts._navPop) navPush('io-record', opts);
+    if (opts._navPop) delete opts._navPop;
+    showScreen('io-record');
+    if (IORecordScreen && IORecordScreen.onShow) IORecordScreen.onShow(opts);
+  }
+
+  function showConnections(opts) {
+    opts = opts || {};
+    if (!opts._navPop) navPush('connections', opts);
+    if (opts._navPop) delete opts._navPop;
+    showScreen('connections');
+    if (ConnectionsScreen && ConnectionsScreen.onShow) ConnectionsScreen.onShow(opts);
   }
 
   function showTimeline() {
@@ -182,29 +286,53 @@
   }
 
   function showWizard(record, opts) {
+    opts = opts || {};
+    if (!opts._navPop) {
+      navPush('wizard', {
+        navLabel: record && record.job ? String(record.job).slice(0, 28) : 'Edit',
+        recordId: record && record.id,
+        record: record,
+      });
+    }
+    if (opts._navPop) delete opts._navPop;
     showScreen('wizard');
-    WizardScreen.onShow(record || null, opts || null);
+    WizardScreen.onShow(record || null, opts);
   }
 
-  function showView(record) {
+  function showView(record, meta) {
+    meta = meta || {};
     if (currentScreen === 'list' && ListScreen.saveNavState) {
       ListScreen.saveNavState();
+      if (typeof NavStack !== 'undefined' && NavStack.amendTop) {
+        NavStack.amendTop({ restoreNav: true });
+      }
+    }
+    if (!meta._navPop) {
+      navPush('view', {
+        navLabel: record && record.job ? String(record.job).slice(0, 28) : 'Record',
+        recordId: record && record.id,
+      });
     }
     showScreen('view');
     ViewScreen.onShow(record);
   }
 
-  function showFinancial(record) {
+  function showFinancial(record, meta) {
+    meta = meta || {};
+    if (!meta._navPop) navPush('financial', { recordId: record && record.id, navLabel: 'Financials' });
     showScreen('financial');
     FinancialScreen.onShow(record);
   }
 
   function showFinanceOverview() {
+    navPush('finance-overview', {});
     showScreen('finance-overview');
     FinanceOverviewScreen.onShow();
   }
 
-  function showShare(record) {
+  function showShare(record, meta) {
+    meta = meta || {};
+    if (!meta._navPop) navPush('share', { recordId: record && record.id, navLabel: 'Share' });
     showScreen('share');
     ShareScreen.onShow(record);
   }
@@ -736,7 +864,7 @@
   function handleSoftkeyPanels(key, e) {
     if (currentScreen === 'onboarding') return false;
     if (currentScreen === 'template-creator') return false;
-    if (currentScreen === 'sale-tally' || currentScreen === 'io-create') {
+    if (currentScreen === 'sale-tally' || currentScreen === 'io-create' || currentScreen === 'io-record') {
       if (key === 'SoftLeft' || key === 'SoftRight' || key === 'Enter') {
         var h = SCREEN_HANDLERS[currentScreen];
         if (key === 'Enter' || key === 'SoftRight') {
@@ -870,8 +998,12 @@
       return true;
     }
     if (key === '*') {
-      // Template creator uses * for block insertion — let it handle the key
       if (currentScreen === 'template-creator') return false;
+      if (currentScreen === 'sale-tally' && SaleTallyScreen && SaleTallyScreen.onStarKey) {
+        SaleTallyScreen.onStarKey();
+        e.preventDefault();
+        return true;
+      }
       showShortcutMap();
       e.preventDefault();
       return true;
@@ -971,6 +1103,8 @@
     showList:          showList,
     showSaleTally:     showSaleTally,
     showIOCreate:      showIOCreate,
+    showIORecord:      showIORecord,
+    showConnections:   showConnections,
     showWizard:        showWizard,
     showView:          showView,
     showFinancial:     showFinancial,
@@ -996,21 +1130,35 @@
     launchCamera:      launchCamera,
     getHomeMode:       getHomeMode,
     setHomeMode:       setHomeMode,
+    cycleHomeMode:     cycleHomeMode,
+    homeModeLabel:     homeModeLabel,
+    HOME_MODES:        HOME_MODES,
     openQuickNote:     openQuickNote,
     SHORTCUT_MAPS:     SHORTCUT_MAPS,
     getCurrentScreen:  function() { return currentScreen; },
+    goBack:            goBack,
   };
 
   if (global.UIPhase && global.UIPhase.onBoot) global.UIPhase.onBoot();
+  if (typeof NavStack !== 'undefined' && NavStack.initCrumbBar) NavStack.initCrumbBar();
 
   checkIncomingUrl();
 
   if (!ActivityService.hasAny()) {
     showOnboarding();
   } else if (getHomeMode() === 'wp+') {
-    showHome();
+    if (typeof NavStack !== 'undefined' && NavStack.replaceRoot) NavStack.replaceRoot('home', {});
+    showScreen('home');
+    HomeScreen.onShow();
+    if (typeof WorkpadsPanel !== 'undefined') WorkpadsPanel.setContext({ screen: 'home' });
+  } else if (getHomeMode() === 'sell') {
+    if (typeof NavStack !== 'undefined' && NavStack.replaceRoot) NavStack.replaceRoot('sale-tally', {});
+    showScreen('sale-tally');
+    if (SaleTallyScreen && SaleTallyScreen.onShow) SaleTallyScreen.onShow({ returnTo: 'list' });
   } else {
-    showList();
+    if (typeof NavStack !== 'undefined' && NavStack.replaceRoot) NavStack.replaceRoot('list', {});
+    showScreen('list');
+    ListScreen.onShow(null);
   }
 
 }(window));

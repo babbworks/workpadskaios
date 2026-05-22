@@ -77,7 +77,9 @@
           'placeholder="Search\u2026" value="' + esc(searchTerm) + '" autocomplete="off">' +
       '</div>' +
       '<div class="country-list" id="country-list">' +
-        (html || '<div class="empty-state">No matches.</div>') +
+        (html || (global.EmptyState
+          ? EmptyState.render('No matches', { hint: 'Try a shorter search.' })
+          : '<div class="empty-state">No matches.</div>')) +
       '</div>';
 
     bindTabEvents();

@@ -24,15 +24,35 @@
   var progressionPickerItems = [];
   var progConfirmOpen       = false;
   var progConfirmTarget     = null; // { type, label } of chosen progression
+  var progConfirmBtnIdx     = 0;
 
-  // Which types can progress to what — Job and Quote are progressable
-  var PROGRESSION_MAP = {
-    '':       [{ type: 'quote',   label: '\u2192 Quote',   icon: 'Q' },
-               { type: 'invoice', label: '\u2192 Invoice',  icon: 'I' }],
-    'quote':  [{ type: 'invoice', label: '\u2192 Invoice',  icon: 'I' },
-               { type: 'receipt', label: '\u2192 Receipt',  icon: 'R' }],
-    'invoice':[{ type: 'receipt', label: '\u2192 Receipt',  icon: 'R' }],
-  };
+  var PROG_ICONS = { quote: 'Q', invoice: 'I', receipt: 'R' };
+
+  function getProgressionItems(rec) {
+    if (!rec) return null;
+    var rt = rec.record_type || '';
+    var acts = global.Lifecycle ? Lifecycle.nextActions(rt) : null;
+    if (!acts || !acts.length) return null;
+    var out = [];
+    for (var i = 0; i < acts.length; i++) {
+      var a = acts[i];
+      var lbl = global.Lifecycle ? Lifecycle.TYPE_LABEL(a.type) : a.type;
+      out.push({
+        type:  a.type,
+        label: '\u2192 ' + lbl,
+        icon:  PROG_ICONS[a.type] || '',
+      });
+    }
+    return out;
+  }
+
+  function isLifecycleType(rt) {
+    return rt === '' || rt === 'quote' || rt === 'invoice' || rt === 'receipt';
+  }
+
+  function lifecycleStripOn() {
+    return !global.UIPhase || UIPhase.isOn('lifecycle_strip');
+  }
 
   // Commit type definitions for "Close / commit" picker
   var COMMIT_TYPES = [
@@ -99,7 +119,37 @@
     'receipt':   'Receipt',
     'collected': 'Collecting',
     'paid':      'Paid in Full',
+    'need':      'Need',
+    'offer':     'Offer',
+    'connection':'Connection',
   };
+
+  function isIORecordType(rt) {
+    return rt === 'need' || rt === 'offer' || rt === 'connection';
+  }
+
+  function fieldLabel(id) {
+    if (id === 'job' && global.GlobalSynonymsService) {
+      return GlobalSynonymsService.resolve('job', null);
+    }
+    return LABELS[id] || id;
+  }
+
+  function doConfirmConnection() {
+    if (!currentRecord || !currentRecord.id) return;
+    RecordService.save(currentRecord.id, { connection_ack: 'confirmed' }).then(function(updated) {
+      if (global.SocialLedger) {
+        SocialLedger.logReferral({
+          ackType: 'relay_confirmed',
+          ackRequired: false,
+          connectionId: currentRecord.id,
+          confirmed: true,
+        });
+      }
+      if (updated) App.showView(updated);
+      else renderRecord(currentRecord);
+    });
+  }
 
   var ROLE_LABELS = { 0: 'Customer', 1: 'Worker', 2: 'Supplier', 3: 'Other' };
   function roleLabel(p) {
@@ -329,7 +379,7 @@
 
     var html = '<div class="view-paper" id="view-sec-top">';
 
-    var progressions = !rec.parentId ? (PROGRESSION_MAP[rt] || null) : null;
+    var progressions = getProgressionItems(rec);
     var progBadge = progressions
       ? '<span class="view-prog-badge view-prog-pulse" id="view-prog-badge">' + esc(designation) + ' \u203a</span>'
       : '<span class="view-rec-class">' + esc(designation) + '</span>';
@@ -337,6 +387,9 @@
       progBadge +
       (typeLabel ? '<span class="view-rec-type">' + esc(typeLabel) + '</span>' : '') +
       '</div>';
+    if (lifecycleStripOn() && isLifecycleType(rt)) {
+      html += '<div id="view-lifecycle-wrap" class="view-lifecycle-wrap"></div>';
+    }
 
     if (rec.trigDisplay) {
       if (rec.trigDisplay.trig_violation) {
@@ -359,7 +412,7 @@
     for (var i = 0; i < keys.length; i++) {
       var id  = keys[i];
       var val = rec[id];
-      if (val) processBody += viewRow(LABELS[id], esc(val));
+      if (val) processBody += viewRow(fieldLabel(id), esc(val));
     }
     if (isContactType(rec)) {
       var roleDisplay;
@@ -434,13 +487,22 @@
         '</div>';
     }
 
-    // Financials section (content injected async)
-    html += '<div class="view-section" id="vsec-fin">' +
-      '<div class="view-sec-hdr">Financials</div>' +
-      '<div class="view-sec-body"><div id="view-fin-card"></div></div>' +
+    if (isIORecordType(rt)) {
+      html += '<div class="view-section" id="vsec-io">' +
+        '<div class="view-sec-hdr">' + esc(TYPE_LABELS[rt] || rt) + '</div>' +
+        '<div class="view-sec-body" id="view-io-card"></div>' +
       '</div>';
+    } else {
+      html += '<div class="view-section" id="vsec-fin">' +
+        '<div class="view-sec-hdr">Financials</div>' +
+        '<div class="view-sec-body"><div id="view-fin-card"></div></div>' +
+      '</div>';
+    }
 
     html += '</div>';
+    if (lifecycleStripOn() && isLifecycleType(rt)) {
+      html += '<div id="view-chain-docs"></div>';
+    }
     el.content.innerHTML = html;
 
     // Wire progression badge (only present when progressions exist)
@@ -453,7 +515,9 @@
 
     populateViewToolbar(rec);
     loadParentSuperLabel(rec);
-    loadFinancialCard(rec);
+    if (isIORecordType(rt)) loadIOCard(rec);
+    else loadFinancialCard(rec);
+    loadLifecycleUI(rec);
 
     // Chain state enrichment — runs for all records that have a chainRef
     // Sets _chainHasDispute so openOptions() can adjust labels without a second async call
@@ -482,6 +546,8 @@
           return r.record_type === 'dispute' || r.disputeFlag;
         });
 
+        refreshLifecycleUI(rec, chainAll);
+
         // ACK bar — only if this record requested acknowledgement
         if (rec.ackRequest || (rec._meta && rec._meta.ackRequest)) {
           var acked = chain.some(function(r) { return r.record_type === 'ack' || r.ackConfirmed; });
@@ -504,6 +570,72 @@
     }
   }
 
+  function buildLifecycleCtaHtml(rec) {
+    if (!global.Lifecycle) return '';
+    var acts = Lifecycle.nextActions(rec.record_type || '');
+    if (!acts || !acts.length) return '';
+    return '<div class="view-lifecycle-cta" id="view-lifecycle-cta" data-prog-type="' +
+      esc(acts[0].type) + '">' + esc(acts[0].label) + '</div>';
+  }
+
+  function wireLifecycleCta(rec) {
+    var btn = document.getElementById('view-lifecycle-cta');
+    if (!btn) return;
+    btn.onclick = function() {
+      var t = btn.getAttribute('data-prog-type');
+      var acts = Lifecycle.nextActions(rec.record_type || '') || [];
+      var item = null;
+      for (var i = 0; i < acts.length; i++) {
+        if (acts[i].type === t) { item = acts[i]; break; }
+      }
+      if (!item && acts[0]) item = acts[0];
+      if (item) openProgConfirm({ type: item.type, label: item.label });
+    };
+  }
+
+  function wireChainDocRows() {
+    var rows = document.querySelectorAll('.view-chain-doc-row');
+    for (var i = 0; i < rows.length; i++) {
+      rows[i].onclick = (function(id) {
+        return function() {
+          RecordService.get(id).then(function(r) { if (r) App.showView(r); });
+        };
+      })(rows[i].getAttribute('data-chain-id'));
+    }
+  }
+
+  function refreshLifecycleUI(rec, chainAll) {
+    if (!lifecycleStripOn() || !global.Lifecycle || !isLifecycleType(rec.record_type || '')) return;
+    var wrap = document.getElementById('view-lifecycle-wrap');
+    if (!wrap || currentRecord !== rec) return;
+    var rt = rec.record_type || '';
+    var chainComplete = false;
+    if (chainAll && chainAll.length) {
+      chainComplete = chainAll.some(function(r) {
+        return (r.record_type || '') === 'state_commit' && r.chainComplete;
+      });
+    }
+    wrap.innerHTML = Lifecycle.stripHtml(rt, chainComplete) + buildLifecycleCtaHtml(rec);
+    wireLifecycleCta(rec);
+    var docsEl = document.getElementById('view-chain-docs');
+    if (docsEl) {
+      var cref = rec.chainRef || rec.id;
+      var docs = Lifecycle.collectChainDocs(chainAll || [], cref);
+      docsEl.innerHTML = Lifecycle.chainDocsHtml(docs, rec.id);
+      wireChainDocRows();
+    }
+  }
+
+  function loadLifecycleUI(rec) {
+    if (!lifecycleStripOn() || !global.Lifecycle || !isLifecycleType(rec.record_type || '')) return;
+    var cref = rec.chainRef || rec.id;
+    refreshLifecycleUI(rec, []);
+    RecordService.listByChainRef(cref).then(function(chainAll) {
+      if (currentRecord !== rec) return;
+      refreshLifecycleUI(rec, chainAll);
+    });
+  }
+
   function loadParentSuperLabel(rec) {
     if (!rec.parentId) return;
     RecordService.get(rec.parentId).then(function(parent) {
@@ -524,6 +656,33 @@
     });
   }
 
+  function loadIOCard(rec) {
+    var card = document.getElementById('view-io-card');
+    if (!card || currentRecord !== rec) return;
+    var rt = rec.record_type || '';
+    var html = '';
+    if (rt === 'need') {
+      var srcLbl = global.IOLabels ? IOLabels.inputSourceLabel(rec.input_source) : (rec.input_source || 'Input');
+      html += viewRow('Input source', esc(srcLbl));
+      if (rec.labour_count) {
+        var labour = esc(String(rec.labour_count)) + ' people';
+        if (rec.labour_role) labour += ' · ' + esc(rec.labour_role);
+        html += viewRow(global.IOLabels ? IOLabels.jobInputsLabel() : 'Job Inputs', labour);
+      }
+    }
+    if (rt === 'offer') {
+      html += viewRow('Offer', esc(rec.job || ''));
+      html += '<div class="view-field-value" style="font-size:11px;color:var(--text-muted);padding:4px 0;">Resource offer — not a relay.</div>';
+    }
+    if (rt === 'connection') {
+      if (rec.relay_to) html += viewRow('Point toward', esc(rec.relay_to));
+      if (rec.relay_note) html += viewRow('Relay note', esc(rec.relay_note));
+      html += viewRow('Ack', esc(rec.connection_ack || 'pending'));
+      html += '<div class="view-field-value" style="font-size:11px;color:var(--text-muted);padding:4px 0;">Bridge only — cannot post an Offer from here.</div>';
+    }
+    card.innerHTML = html || '<div class="view-field-value">—</div>';
+  }
+
   // ── Financial card ───────────────────────────────────────────────────────
 
   function loadFinancialCard(rec) {
@@ -532,6 +691,12 @@
       var card = document.getElementById('view-fin-card');
       if (!card || currentRecord !== rec) return;
       var summary = FinancialModel.summarize(rec, children);
+      var rt = rec.record_type || '';
+      var lcHtml = '';
+      if (global.InvoiceLifecycle && InvoiceLifecycle.isLifecycleParent(rec)) {
+        var roll = InvoiceLifecycle.rollup(rec, children);
+        lcHtml = InvoiceLifecycle.stripHtml(roll, rec.currency || '');
+      }
       if (!rec.amount && !summary.expenses.length && !summary.payments.length) {
         var finSec = document.getElementById('vsec-fin');
         if (finSec) finSec.style.display = 'none';
@@ -546,7 +711,7 @@
       var cogsCats = Object.keys(cogsByCat);
       var actionKeys = Object.keys(actionOut).filter(function(k) { return k !== ''; });
 
-      var html = '<div style="padding-top:4px;">';
+      var html = lcHtml + '<div style="padding-top:4px;">';
 
       // Qty × Rate
       if (rec.qty && rec.rate) {
@@ -585,8 +750,9 @@
       for (var j = 0; j < summary.cogs.lines.length; j++) {
         var line = summary.cogs.lines[j];
         var ref = line.status === 'overrun' ? ' (overrun)' : (line.status === 'within' ? ' (within)' : ' (unlinked)');
+        var cogsLbl = global.IOLabels ? IOLabels.cogsLabel() : 'COGS';
         html += viewRow(
-          'COGS · ' + esc((line.record.job || 'COGS') + ref),
+          cogsLbl + ' · ' + esc((line.record.job || cogsLbl) + ref),
           fmtMoney(parseFloat(line.record.amount || 0), currency),
           'color:var(--text-muted);'
         );
@@ -603,7 +769,8 @@
         var outStyle = summary.outstanding > 0 ? 'font-weight:bold;' : 'color:var(--accent);font-weight:bold;';
         html += viewRow('Outstanding', fmtMoney(summary.outstanding, currency), outStyle);
       }
-      html += viewRow('COGS split',
+      var cogsSplitLbl = global.IOLabels ? IOLabels.cogsLabel() : 'COGS';
+      html += viewRow(cogsSplitLbl + ' split',
         'within ' + fmtMoney(summary.cogs.withinBudget, currency) +
         ' · overrun ' + fmtMoney(summary.cogs.overrun, currency) +
         ' · unlinked ' + fmtMoney(summary.cogs.unlinked, currency),
@@ -655,6 +822,9 @@
     var isChild       = !!rec.parentId;
     var isLocked      = isStateCommit || isDispute || isAmendment;
 
+    var rt = rec.record_type || '';
+    var ioRec = isIORecordType(rt);
+
     optionsItems = [
       { key: '1', label: 'Edit',             action: function() { App.showWizard(rec); } },
       { key: '2', label: 'Share',            action: function() { App.showShare(rec); } },
@@ -663,6 +833,13 @@
       { key: '5', label: 'Archive record',   action: doArchive },
       { key: '6', label: 'Save as template', action: doSaveAsTemplate },
     ];
+
+    if (ioRec) {
+      optionsItems = optionsItems.filter(function(o) { return o.key !== '3'; });
+    }
+    if (rt === 'connection' && rec.connection_ack !== 'confirmed') {
+      optionsItems.unshift({ key: '', label: 'Confirm relay', action: doConfirmConnection });
+    }
 
     if (!isContact && !isLocked && !isChild) {
       optionsItems.push({ key: '7', label: 'Close / commit \u2026', action: doOpenCommitPicker });
@@ -691,11 +868,17 @@
     if (!listEl) return;
     listEl.innerHTML = optionsItems.map(function(item, i) {
       var hint = item.key ? '<span class="opt-key-hint">[' + esc(item.key) + ']</span>' : '';
-      return '<div class="list-item opt-menu-row' + (i === optionsIdx ? ' focused' : '') + '">' +
+      return '<div class="list-item opt-menu-row' + (i === optionsIdx ? ' focused' : '') + '" data-opt-idx="' + i + '">' +
         '<div class="list-item-title">' + esc(item.label) + '</div>' +
         hint +
         '</div>';
     }).join('');
+    if (global.OverlayFocus) {
+      OverlayFocus.bindRows(listEl, 'data-opt-idx', function(idx) {
+        optionsIdx = idx;
+        selectOption();
+      });
+    }
     listEl.scrollTop = 0;
     var focused = listEl.children[optionsIdx];
     if (focused) focused.scrollIntoView({ block: 'nearest' });
@@ -718,6 +901,7 @@
         else App.showList();
       });
     } else {
+      if (App.goBack && App.goBack()) return;
       App.showList({ restoreNav: true });
     }
   }
@@ -751,15 +935,14 @@
     var el = document.getElementById('commit-content');
     if (!el) return;
     el.innerHTML = COMMIT_TYPES.map(function(t, i) {
-      return '<div class="list-item' + (i === commitPickerIdx ? ' focused' : '') + '" data-commit-val="' + t.val + '">' +
+      return '<div class="list-item' + (i === commitPickerIdx ? ' focused' : '') + '" data-commit-idx="' + i + '">' +
         '<div class="list-item-title">' + esc(t.icon + ' ' + t.label) + '</div>' +
         '</div>';
     }).join('');
-    var rows = el.querySelectorAll('[data-commit-val]');
-    for (var i = 0; i < rows.length; i++) {
-      rows[i].addEventListener('click', (function(v) {
-        return function() { confirmCommit(parseInt(v, 10)); };
-      })(rows[i].getAttribute('data-commit-val')));
+    if (global.OverlayFocus) {
+      OverlayFocus.bindRows(el, 'data-commit-idx', function(idx) {
+        confirmCommit(COMMIT_TYPES[idx].val);
+      });
     }
   }
 
@@ -810,7 +993,7 @@
 
   function openProgressionPicker() {
     if (!currentRecord) return;
-    var items = PROGRESSION_MAP[currentRecord.record_type || ''];
+    var items = getProgressionItems(currentRecord);
     if (!items || !items.length) return;
     progressionPickerItems = items;
     progressionPickerIdx   = 0;
@@ -831,7 +1014,7 @@
     for (var i = 0; i < progressionPickerItems.length; i++) {
       var item = progressionPickerItems[i];
       html += '<div class="list-item' + (i === progressionPickerIdx ? ' focused' : '') +
-        '" data-prog-idx="' + i + '">' +
+        '" data-prog-idx="' + i + '" data-idx="' + i + '">' +
         '<div class="list-item-title">' + esc(item.label) + '</div>' +
         '</div>';
     }
@@ -854,9 +1037,19 @@
 
   // ── Progression confirm overlay ─────────────────────────────────────────
 
+  function updateProgConfirmFocus() {
+    if (!global.OverlayFocus) return;
+    OverlayFocus.markChipFocus(
+      document.getElementById('prog-confirm-cancel'),
+      document.getElementById('prog-confirm-ok'),
+      progConfirmBtnIdx
+    );
+  }
+
   function openProgConfirm(item) {
     progConfirmTarget = item;
     progConfirmOpen   = true;
+    progConfirmBtnIdx = 1;
     var titleEl = document.getElementById('prog-confirm-title');
     var subEl   = document.getElementById('prog-confirm-sub');
     if (titleEl) titleEl.textContent = item.label;
@@ -866,6 +1059,7 @@
     if (cancelBtn) cancelBtn.onclick = function() { closeProgConfirm(); };
     if (okBtn)     okBtn.onclick     = function() { doProgressTo(progConfirmTarget); };
     document.getElementById('overlay-prog-confirm').style.display = 'flex';
+    updateProgConfirmFocus();
   }
 
   function closeProgConfirm() {
@@ -881,7 +1075,7 @@
     var clone = merge({}, src, {
       record_type: item.type,
       parentId:    src.id,
-      chainRef:    src.chainRef,
+      chainRef:    src.chainRef || src.id,
       draft:       true,
     });
     // Must delete id so RecordService.create() generates a fresh one
@@ -969,38 +1163,40 @@
   function onKey(key) {
     // Progression confirm overlay (highest priority)
     if (progConfirmOpen) {
-      if (key === 'Backspace') { closeProgConfirm(); }
-      if (key === 'Enter')     { doProgressTo(progConfirmTarget); }
+      var chipSt = { idx: progConfirmBtnIdx };
+      if (global.OverlayFocus && OverlayFocus.handleChipKey(
+        key, chipSt,
+        function() { progConfirmBtnIdx = chipSt.idx; updateProgConfirmFocus(); },
+        function(i) {
+          if (i === 0) closeProgConfirm();
+          else doProgressTo(progConfirmTarget);
+        },
+        closeProgConfirm
+      )) return;
       return;
     }
 
     // Progression picker
     if (progressionPickerOpen) {
-      switch (key) {
-        case 'ArrowUp':
-          if (progressionPickerIdx > 0) { progressionPickerIdx--; renderProgressionPicker(); }
-          break;
-        case 'ArrowDown':
-          if (progressionPickerIdx < progressionPickerItems.length - 1) { progressionPickerIdx++; renderProgressionPicker(); }
-          break;
-        case 'Enter':     selectProgression(progressionPickerIdx); break;
-        case 'Backspace': closeProgressionPicker(); break;
-      }
+      var progSt = { idx: progressionPickerIdx };
+      if (global.OverlayFocus && OverlayFocus.handleKey(
+        key, progSt, progressionPickerItems.length,
+        function() { progressionPickerIdx = progSt.idx; renderProgressionPicker(); },
+        function(i) { selectProgression(i); },
+        closeProgressionPicker
+      )) return;
       return;
     }
 
     // Commit picker has highest priority after options overlay
     if (commitPickerOpen) {
-      switch (key) {
-        case 'ArrowUp':
-          if (commitPickerIdx > 0) { commitPickerIdx--; renderCommitPicker(); }
-          break;
-        case 'ArrowDown':
-          if (commitPickerIdx < COMMIT_TYPES.length - 1) { commitPickerIdx++; renderCommitPicker(); }
-          break;
-        case 'Enter':     confirmCommit(COMMIT_TYPES[commitPickerIdx].val); break;
-        case 'Backspace': closeCommitPicker(); break;
-      }
+      var commitSt = { idx: commitPickerIdx };
+      if (global.OverlayFocus && OverlayFocus.handleKey(
+        key, commitSt, COMMIT_TYPES.length,
+        function() { commitPickerIdx = commitSt.idx; renderCommitPicker(); },
+        function(i) { confirmCommit(COMMIT_TYPES[i].val); },
+        closeCommitPicker
+      )) return;
       return;
     }
 
@@ -1011,16 +1207,13 @@
         if (oi < optionsItems.length) { optionsIdx = oi; selectOption(); }
         return;
       }
-      switch (key) {
-        case 'ArrowUp':
-          if (optionsIdx > 0) { optionsIdx--; renderOptions(); }
-          break;
-        case 'ArrowDown':
-          if (optionsIdx < optionsItems.length - 1) { optionsIdx++; renderOptions(); }
-          break;
-        case 'Enter':   selectOption();  break;
-        case 'Backspace': closeOptions(); break;
-      }
+      var optSt = { idx: optionsIdx };
+      if (global.OverlayFocus && OverlayFocus.handleKey(
+        key, optSt, optionsItems.length,
+        function() { optionsIdx = optSt.idx; renderOptions(); },
+        function(i) { optionsIdx = i; selectOption(); },
+        closeOptions
+      )) return;
       return;
     }
 

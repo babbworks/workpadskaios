@@ -12,22 +12,14 @@
   ];
 
   var LINK_MODES = [
-    { value: 'none',     label: 'Standalone — no link'     },
-    { value: 'activity', label: 'Link to Activity'         },
-    { value: 'record',   label: 'Link to Job Record'       },
-    { value: 'action',   label: 'Link to Record Action'    },
+    { value: 'none',   label: 'Standalone'            },
+    { value: 'record', label: 'Link to Job Record'    },
+    { value: 'action', label: 'Link to Record Action' },
   ];
 
-  var CHARGE_LABELS = {
-    '':  'General labour',
-    '1': 'Materials',
-    '2': 'Subcontractor',
-    '3': 'Equipment',
-    '4': 'Travel',
-    '5': 'Software / license',
-    '6': 'Professional fee',
-    '7': 'Other',
-  };
+  function chargeLabels() {
+    return (global.FinancialModel && FinancialModel.CHARGE_LABELS) || { '': 'Labour' };
+  }
 
   // State
   var entryType    = 'expense';
@@ -35,19 +27,43 @@
   var description  = '';
   var entryDate    = '';
   var chargeType   = '';
+  var inputSource  = 'unsourced';
+  var labourCount  = '';
+  var labourRole   = '';
   var linkMode     = 'none';
   var activityId   = '';
   var linkedRecord = null;   // full record object when record/action mode
   var actionIdx    = null;   // index into linkedRecord.actions
-  var allRecords   = [];     // loaded for record picker
+  var allRecords   = [];     // loaded on demand for record picker
+  var recordsLoading = false;
+  var parentRecord   = null; // fetched parent when not passed via wizard/financial
   var recSearch    = '';
   var recPickerActive = false;
   var recPickerFocusIdx = 0;
   var filteredRecs = [];
-  var returnTo     = null;   // 'wizard' | null — screen to return to after save/back
-  var parentId     = null;   // parentId to stamp on created record (when returnTo='wizard')
-  var wizardRecord = null;   // the wizard's currentRecord, passed back after save
-  var errorMsg     = '';     // inline validation error
+  var returnTo        = null;  // 'wizard' | 'financial' | null
+  var returnFinTab    = 0;     // finTab to restore when returning to wizard F tab
+  var parentId        = null;  // parentId to stamp on created record
+  var wizardRecord    = null;  // the wizard's currentRecord, passed back after save
+  var financialRecord = null;  // the financial screen's record, used when returnTo='financial'
+  var editRecord    = null;   // if set, we are editing an existing record (not creating)
+  var linkedContact = null;  // contact record pre-fill (from contact panel)
+  var paidOwed      = 'paid'; // 'paid' | 'owed' — toggle shown for Worker/Vendor contacts
+  var errorMsg      = '';     // inline validation error
+
+  // Category values that warrant the "Paid/Owed" toggle
+  var WORKER_VENDOR_CATS = { 2: 1, 3: 1, 4: 1, 5: 1, 7: 1, 8: 1 };
+
+  function isWorkerVendorContact(c) {
+    if (!c) return false;
+    if (c.roles && c.roles.length) {
+      for (var i = 0; i < c.roles.length; i++) {
+        if (WORKER_VENDOR_CATS[c.roles[i]]) return true;
+      }
+      return false;
+    }
+    return !!WORKER_VENDOR_CATS[parseInt(c.category, 10)];
+  }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -63,6 +79,59 @@
     var mm = String(d.getMonth() + 1).padStart ? String(d.getMonth() + 1).padStart(2, '0') : ('0' + (d.getMonth() + 1)).slice(-2);
     var dd = d.getDate() < 10 ? '0' + d.getDate() : String(d.getDate());
     return d.getFullYear() + '-' + mm + '-' + dd;
+  }
+
+  function parentRecForDisplay() {
+    if (!parentId) return null;
+    if (wizardRecord && wizardRecord.id === parentId) return wizardRecord;
+    if (financialRecord && financialRecord.id === parentId) return financialRecord;
+    if (linkedRecord && linkedRecord.id === parentId) return linkedRecord;
+    return parentRecord;
+  }
+
+  function fixedParentContext() {
+    if (!parentId) return false;
+    return (wizardRecord && wizardRecord.id === parentId) ||
+      (financialRecord && financialRecord.id === parentId);
+  }
+
+  function parentCardHtml(rec) {
+    if (!rec) {
+      return '<div style="padding:6px 10px;font-size:11px;color:var(--text-muted);">Loading parent\u2026</div>';
+    }
+    return '<div class="ledger-linked-rec">' +
+      '<div class="field-label" style="padding:6px 10px 2px;">Parent job</div>' +
+      '<div class="list-item focused" style="margin:0 10px;border-radius:2px;pointer-events:none;">' +
+        '<div class="list-item-title">' + esc(rec.job || '(untitled)') + '</div>' +
+        '<div class="list-item-sub">' + esc(rec.date || '') + (rec.customer ? ' \u00b7 ' + esc(rec.customer) : '') + '</div>' +
+      '</div></div>';
+  }
+
+  function loadParentRecord() {
+    if (!parentId) return;
+    if (parentRecForDisplay()) return;
+    RecordService.get(parentId).then(function(p) {
+      if (!p || p.id !== parentId) return;
+      parentRecord = p;
+      render();
+    });
+  }
+
+  function ensureRecordsLoaded(done) {
+    if (!recPickerActive || linkedRecord) return;
+    if (allRecords.length) {
+      if (done) done();
+      return;
+    }
+    if (recordsLoading) return;
+    recordsLoading = true;
+    RecordService.list().then(function(recs) {
+      recordsLoading = false;
+      allRecords = recs.filter(function(r) { return !r.parentId; });
+      filterRecs();
+      if (done) done();
+      else if (recPickerActive) updateRecPickerList();
+    });
   }
 
   // ── Type tabs ─────────────────────────────────────────────────────────────
@@ -108,6 +177,11 @@
 
   function recPickerHtml() {
     if (!recPickerActive) return '';
+    if (!allRecords.length) {
+      return '<div class="ledger-rec-picker">' +
+        '<div style="padding:8px 10px;font-size:11px;color:var(--text-muted);">Loading records\u2026</div>' +
+        '</div>';
+    }
     filterRecs();
     var rows = filteredRecs.map(function(r, i) {
       var focused = i === recPickerFocusIdx ? ' focused' : '';
@@ -198,6 +272,25 @@
       html += '<div style="padding:4px 10px 2px;color:#f44336;font-size:11px;">' + esc(errorMsg) + '</div>';
     }
 
+    // ── Activity (always first, independent top-level field) ──────────────────
+    if (activities.length) {
+      var actOpts = '<option value="">— No activity —</option>' + activities.map(function(a) {
+        return '<option value="' + esc(a.id) + '"' + (a.id === activityId ? ' selected' : '') + '>' + esc(a.name) + '</option>';
+      }).join('');
+      html += '<div class="field-group">' +
+        '<div class="field-label">Activity</div>' +
+        '<select class="field-input" id="led-activity">' + actOpts + '</select></div>';
+    }
+
+    // ── Contact pre-fill (when launched from contact panel) ───────────────────
+    if (linkedContact) {
+      var cName = linkedContact.job || linkedContact.name || '';
+      html += '<div class="field-group">' +
+        '<div class="field-label">Contact</div>' +
+        '<div class="field-input" style="background:var(--bg3);color:var(--text-muted);cursor:default;">' + esc(cName) + '</div>' +
+      '</div>';
+    }
+
     // Amount
     html += '<div class="field-group">' +
       '<div class="field-label">Amount' + (currency ? ' (' + esc(currency) + ')' : '') + ' *</div>' +
@@ -215,40 +308,68 @@
       '<div class="field-label">Date</div>' +
       '<input class="field-input" id="led-date" type="date" value="' + esc(entryDate) + '"></div>';
 
+    // Parent job (edit or wizard/financial context — view screen already shows this on read)
+    if (parentId && (editRecord || fixedParentContext())) {
+      html += parentCardHtml(parentRecForDisplay());
+    }
+
     // Charge type (COGS only)
     if (entryType === 'cogs') {
-      var chargeOpts = Object.keys(CHARGE_LABELS).map(function(k) {
-        return '<option value="' + esc(k) + '"' + (k === chargeType ? ' selected' : '') + '>' + esc(CHARGE_LABELS[k]) + '</option>';
+      var labels = chargeLabels();
+      var chargeOpts = Object.keys(labels).map(function(k) {
+        return '<option value="' + esc(k) + '"' + (k === chargeType ? ' selected' : '') + '>' + esc(labels[k]) + '</option>';
       }).join('');
       html += '<div class="field-group">' +
         '<div class="field-label">Category</div>' +
         '<select class="field-input" id="led-charge">' + chargeOpts + '</select></div>';
+      var jiLbl = global.IOLabels ? IOLabels.jobInputsLabel() : 'Job Inputs';
+      var srcUn = global.IOLabels ? IOLabels.unsourcedInputsLabel() : 'Unsourced Inputs';
+      var srcSo = global.IOLabels ? IOLabels.sourcedInputsLabel() : 'Sourced Inputs';
+      html += '<div class="field-group">' +
+        '<div class="field-label">' + esc(jiLbl) + ' — source</div>' +
+        '<select class="field-input" id="led-input-src">' +
+          '<option value="unsourced"' + (inputSource === 'unsourced' ? ' selected' : '') + '>' + esc(srcUn) + '</option>' +
+          '<option value="sourced"' + (inputSource === 'sourced' ? ' selected' : '') + '>' + esc(srcSo) + '</option>' +
+        '</select></div>';
+      html += '<div class="field-group">' +
+        '<div class="field-label">Labour headcount</div>' +
+        '<input class="field-input" id="led-labour-count" type="number" min="0" value="' + esc(labourCount) + '"></div>';
+      html += '<div class="field-group">' +
+        '<div class="field-label">Labour role</div>' +
+        '<input class="field-input" id="led-labour-role" value="' + esc(labourRole) + '"></div>';
     }
 
-    // Link mode
-    var linkOpts = LINK_MODES.map(function(m) {
-      return '<option value="' + m.value + '"' + (m.value === linkMode ? ' selected' : '') + '>' + esc(m.label) + '</option>';
-    }).join('');
-    html += '<div class="field-group">' +
-      '<div class="field-label">Associate with</div>' +
-      '<select class="field-input" id="led-link">' + linkOpts + '</select></div>';
+    // ── Paid / Owed toggle (Worker/Vendor contacts + Exp/COGS only) ──────────
+    if (linkedContact && isWorkerVendorContact(linkedContact) &&
+        (entryType === 'expense' || entryType === 'cogs')) {
+      html += '<div class="field-group">' +
+        '<div class="field-label">Status</div>' +
+        '<div class="liab-dir-row">' +
+          '<div class="liab-dir-btn' + (paidOwed === 'paid' ? ' active' : '') + '" id="led-paid-btn">' +
+            '<span class="liab-dir-arrow">&#10003; Paid</span>' +
+            '<span class="liab-dir-desc">Already paid out</span>' +
+          '</div>' +
+          '<div class="liab-dir-btn' + (paidOwed === 'owed' ? ' active' : '') + '" id="led-owed-btn">' +
+            '<span class="liab-dir-arrow">&#8681; Owed</span>' +
+            '<span class="liab-dir-desc">Not yet paid (Payable)</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
 
-    // Activity picker
-    if (linkMode === 'activity') {
-      if (activities.length) {
-        var actOpts = '<option value="">— Select —</option>' + activities.map(function(a) {
-          return '<option value="' + esc(a.id) + '"' + (a.id === activityId ? ' selected' : '') + '>' + esc(a.name) + '</option>';
-        }).join('');
-        html += '<div class="field-group">' +
-          '<div class="field-label">Activity</div>' +
-          '<select class="field-input" id="led-activity">' + actOpts + '</select></div>';
-      } else {
-        html += '<div style="padding:6px 10px;font-size:11px;color:var(--text-muted);">No activities. Add them in Manage → Activities.</div>';
-      }
+    // ── Link to Job Record / Action (hidden when parent is fixed from caller) ─
+    var hideLinkUi = (editRecord && parentId) || fixedParentContext();
+    if (!hideLinkUi) {
+      var linkOpts = LINK_MODES.map(function(m) {
+        return '<option value="' + m.value + '"' + (m.value === linkMode ? ' selected' : '') + '>' + esc(m.label) + '</option>';
+      }).join('');
+      html += '<div class="field-group">' +
+        '<div class="field-label">Link to record</div>' +
+        '<select class="field-input" id="led-link">' + linkOpts + '</select></div>';
     }
 
     // Record picker
-    if (linkMode === 'record' || linkMode === 'action') {
+    if (!hideLinkUi && (linkMode === 'record' || linkMode === 'action')) {
       if (linkedRecord) {
         html += '<div class="ledger-linked-rec">' +
           '<div class="field-label" style="padding:6px 10px 2px;">Linked record</div>' +
@@ -277,6 +398,12 @@
 
     content.innerHTML = html;
 
+    // Bind Paid/Owed toggle
+    var paidBtn = document.getElementById('led-paid-btn');
+    var owedBtn = document.getElementById('led-owed-btn');
+    if (paidBtn) paidBtn.addEventListener('click', function() { paidOwed = 'paid'; render(); });
+    if (owedBtn) owedBtn.addEventListener('click', function() { paidOwed = 'owed'; render(); });
+
     // Bind link mode change
     var linkSel = document.getElementById('led-link');
     if (linkSel) {
@@ -284,10 +411,10 @@
         linkMode = this.value;
         linkedRecord = null;
         actionIdx = null;
-        activityId = '';
         recSearch = '';
         recPickerActive = (linkMode === 'record' || linkMode === 'action');
         render();
+        if (recPickerActive) ensureRecordsLoaded(function() { render(); });
       });
     }
 
@@ -308,11 +435,16 @@
         recSearch = '';
         recPickerActive = true;
         render();
+        ensureRecordsLoaded(function() { render(); });
       });
     }
 
     // Bind record picker search
-    if (recPickerActive) bindRecPicker();
+    if (recPickerActive) {
+      ensureRecordsLoaded(function() {
+        if (allRecords.length) bindRecPicker();
+      });
+    }
 
     // Focus first field
     var firstInp = document.getElementById('led-amount');
@@ -330,6 +462,12 @@
     if (d)  description = d.value.trim();
     if (dt) entryDate   = dt.value;
     if (ch) chargeType  = ch.value;
+    var src = document.getElementById('led-input-src');
+    var lc = document.getElementById('led-labour-count');
+    var lr = document.getElementById('led-labour-role');
+    if (src) inputSource = src.value;
+    if (lc) labourCount = lc.value.trim();
+    if (lr) labourRole = lr.value.trim();
     if (ac) activityId  = ac.value;
     if (ai) actionIdx   = ai.value !== '' ? parseInt(ai.value, 10) : null;
   }
@@ -343,14 +481,30 @@
     if (!description) { errorMsg = 'Description is required.'; render(); return; }
 
     var locale = (typeof ActivityService !== 'undefined') ? ActivityService.getLocale() : { currency: '' };
+    // "Owed" toggle redirects to Payable in LiabilitiesScreen
+    if (linkedContact && paidOwed === 'owed' &&
+        (entryType === 'expense' || entryType === 'cogs') &&
+        isWorkerVendorContact(linkedContact)) {
+      if (typeof App !== 'undefined') {
+        App.showLiabilities({
+          type: 'payable',
+          linkedContact: linkedContact,
+          returnTo: returnTo,
+        });
+      }
+      return;
+    }
+
     var fields = {
-      job:          description,
-      amount:       amount,
-      currency:     locale.currency || '',
-      date:         entryDate || todayStr(),
-      activityId:   activityId || undefined,
-      parentId:     linkedRecord ? linkedRecord.id : (parentId || undefined),
-      actionIdx:    (actionIdx !== null && actionIdx !== undefined) ? actionIdx : undefined,
+      job:             description,
+      amount:          amount,
+      currency:        locale.currency || '',
+      date:            entryDate || todayStr(),
+      activityId:      activityId || undefined,
+      parentId:        linkedRecord ? linkedRecord.id : (parentId || undefined),
+      actionIdx:       (actionIdx !== null && actionIdx !== undefined) ? actionIdx : undefined,
+      customer:        linkedContact ? (linkedContact.job || linkedContact.name || undefined) : undefined,
+      linkedContactId: linkedContact ? linkedContact.id : undefined,
     };
 
     if (entryType === 'payment') {
@@ -359,11 +513,21 @@
     } else {
       fields.record_type      = 'expense';
       fields.expense_billing  = (entryType === 'cogs') ? 'cogs' : 'customer';
-      if (entryType === 'cogs') fields.charge_type = chargeType;
+      if (entryType === 'cogs') {
+        fields.charge_type = chargeType;
+        if (inputSource) fields.input_source = inputSource;
+        if (labourCount) fields.labour_count = labourCount;
+        if (labourRole) fields.labour_role = labourRole;
+      }
     }
 
-    RecordService.create(fields).then(function() {
-      if (returnTo === 'wizard' && wizardRecord) App.showWizard(wizardRecord, { startScreen: 4 });
+    var op = editRecord
+      ? RecordService.save(editRecord.id, fields)
+      : RecordService.create(fields);
+
+    op.then(function() {
+      if (returnTo === 'financial' && financialRecord) App.showFinancial(financialRecord);
+      else if (returnTo === 'wizard' && wizardRecord) App.showWizard(wizardRecord, { startScreen: 4, finTab: returnFinTab });
       else App.showList();
     });
   }
@@ -371,42 +535,73 @@
   // ── Public API ────────────────────────────────────────────────────────────
 
   function onShow(opts) {
-    var t = opts && opts.type;
-    entryType    = (t === 'cogs' || t === 'payment') ? t : 'expense';
-    amount       = '';
-    description  = '';
-    entryDate    = todayStr();
-    chargeType   = '';
-    actionIdx    = null;
-    recSearch    = '';
+    editRecord      = (opts && opts.editRecord)      || null;
+    returnTo        = (opts && opts.returnTo)        || null;
+    returnFinTab    = (opts && opts.returnFinTab != null) ? opts.returnFinTab : 0;
+    parentId        = (opts && opts.parentId)        || null;
+    wizardRecord    = (opts && opts.wizardRecord)    || null;
+    financialRecord = (opts && opts.financialRecord) || null;
+    errorMsg      = '';
+    recSearch     = '';
     recPickerFocusIdx = 0;
-    filteredRecs = [];
-    allRecords   = [];
-    errorMsg     = '';
-    returnTo     = (opts && opts.returnTo) || null;
-    parentId     = (opts && opts.parentId) || null;
-    wizardRecord = (opts && opts.wizardRecord) || null;
+    filteredRecs  = [];
+    allRecords    = [];
+    recordsLoading = false;
+    parentRecord  = null;
 
-    // Pre-link from caller (e.g. panel quick-create buttons)
-    linkedRecord = (opts && opts.linkedRecord) || null;
-    linkMode     = (opts && opts.linkMode) || 'none';
-    activityId   = (opts && opts.activityId) || '';
-    recPickerActive = (linkMode === 'record' || linkMode === 'action') && !linkedRecord;
+    linkedContact = (opts && opts.linkedContact) || null;
+    paidOwed = 'paid';
+
+    if (editRecord) {
+      // Edit mode — pre-populate from existing record
+      var rt = (editRecord.record_type || '').toLowerCase();
+      var billing = (editRecord.expense_billing || '').toLowerCase();
+      entryType   = rt === 'payment' ? 'payment' : (billing === 'cogs' ? 'cogs' : 'expense');
+      amount      = editRecord.amount || '';
+      description = editRecord.job || editRecord.description || '';
+      entryDate   = editRecord.date || todayStr();
+      chargeType  = editRecord.charge_type || '';
+      inputSource = editRecord.input_source || 'unsourced';
+      labourCount = editRecord.labour_count || '';
+      labourRole  = editRecord.labour_role || '';
+      activityId  = editRecord.activityId  || '';
+      actionIdx   = editRecord.actionIdx   != null ? editRecord.actionIdx : null;
+      parentId    = editRecord.parentId    || parentId;
+      linkedRecord = null;
+      linkMode     = 'none';
+      recPickerActive = false;
+    } else {
+      // Create mode
+      var t = opts && opts.type;
+      entryType    = (t === 'cogs' || t === 'payment') ? t : 'expense';
+      amount       = '';
+      description  = '';
+      entryDate    = todayStr();
+      chargeType   = '';
+      inputSource  = 'unsourced';
+      labourCount  = '';
+      labourRole   = '';
+      actionIdx    = null;
+      linkedRecord = (opts && opts.linkedRecord) || null;
+      linkMode     = (opts && opts.linkMode) || 'none';
+      // Pre-fill activityId from contact if provided, else from opts
+      activityId   = (linkedContact && linkedContact.activityId) || (opts && opts.activityId) || '';
+      recPickerActive = (linkMode === 'record' || linkMode === 'action') && !linkedRecord;
+    }
 
     updateTypeTabs();
     bindTypeTabs();
     render();
 
-    // Load records in background for picker
-    RecordService.list().then(function(recs) {
-      allRecords = recs.filter(function(r) { return !r.parentId; });
-    });
+    if (parentId) loadParentRecord();
+    if (recPickerActive) ensureRecordsLoaded(function() { render(); });
   }
 
   function onKey(key) {
     switch (key) {
       case 'Backspace':
-        if (returnTo === 'wizard' && wizardRecord) App.showWizard(wizardRecord, { startScreen: 4 });
+        if (returnTo === 'financial' && financialRecord) App.showFinancial(financialRecord);
+        else if (returnTo === 'wizard' && wizardRecord) App.showWizard(wizardRecord, { startScreen: 4, finTab: returnFinTab });
         else App.showList();
         break;
       case 'Enter':
