@@ -8,6 +8,12 @@
   var ACTIVE_KEY = 'wp_activity_active';
   var PREFIX     = 'wp_activity_';
 
+  var ACT_COLORS = [
+    '#4a9eff','#e05050','#50c878','#f0a030','#c878e0',
+    '#00c8c0','#ff6080','#90c840','#f0d040','#8880ff',
+    '#ff8040','#40d0a0','#d04080','#60ff80','#ff40c0','#60b0d8',
+  ];
+
   // ── Locale registry ───────────────────────────────────────────────────────────
   // Each entry is the single source of truth for its locale —
   // used for onboarding select, management settings, and getLocale() defaults.
@@ -65,6 +71,7 @@
       {
         id:                 id,
         name:               '',
+        color:              ACT_COLORS[Math.floor(Math.random() * ACT_COLORS.length)],
         type:               'freelance',
         isBusiness:         false,
         phone:              '',
@@ -142,6 +149,36 @@
     return { name: act.name || '', phone: act.phone || '' };
   }
 
+  var FIN_CCY_KEY_1 = 'wp_fin_ccy_primary';
+  var FIN_CCY_KEY_2 = 'wp_fin_ccy_secondary';
+
+  function getFinPriority() {
+    return {
+      primary:   localStorage.getItem(FIN_CCY_KEY_1) || '',
+      secondary: localStorage.getItem(FIN_CCY_KEY_2) || '',
+    };
+  }
+
+  function setFinPriority(primary, secondary) {
+    if (primary)   localStorage.setItem(FIN_CCY_KEY_1, String(primary).toUpperCase());
+    else           localStorage.removeItem(FIN_CCY_KEY_1);
+    if (secondary) localStorage.setItem(FIN_CCY_KEY_2, String(secondary).toUpperCase());
+    else           localStorage.removeItem(FIN_CCY_KEY_2);
+  }
+
+  function sortCurrencies(curs) {
+    var pri = getFinPriority();
+    var out = curs.slice();
+    out.sort(function(a, b) {
+      if (a === pri.primary) return -1;
+      if (b === pri.primary) return 1;
+      if (a === pri.secondary) return -1;
+      if (b === pri.secondary) return 1;
+      return a.localeCompare(b);
+    });
+    return out;
+  }
+
   global.ActivityService = {
     LOCALE_OPTIONS:    LOCALE_OPTIONS,
     getActive:         getActive,
@@ -153,6 +190,9 @@
     setActive:         setActive,
     hasAny:            hasAny,
     getSenderIdentity: getSenderIdentity,
+    getFinPriority:    getFinPriority,
+    setFinPriority:    setFinPriority,
+    sortCurrencies:    sortCurrencies,
   };
 
 }(window));

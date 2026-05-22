@@ -1,4 +1,5 @@
-// Screen: Management — Records | Personal | Settings tabs
+// Screen: Management — User | Records | Personal | Activities | My Templates tabs
+// My Templates = RecordTemplateService (Personal / Imported / awaiting import)
 // Exposes: window.ManagementScreen
 
 (function(global) {
@@ -14,6 +15,30 @@
   var actFocusIdx   = 0;  // focused activity item index (-1 = new-input row)
   var actItems      = []; // current WorkActivity list
   var actDelPending = null; // id of activity pending delete confirmation
+
+  // ── My Templates tab state (RecordTemplateService) ───────────────────────
+  var tplItems      = [];
+  var tplFocusIdx   = 0;
+  var tplScopeTab   = 'personal'; // 'personal' | 'imported'
+  var tplMode       = 'list';     // 'list' | 'pending-list' | 'form' | 'confirm-delete'
+  var tplEditId     = null;
+  var tplDelPending = null;
+
+  var TPL_TYPE_OPTS = [
+    { val: '',        label: 'Job'      },
+    { val: 'quote',   label: 'Quote'    },
+    { val: 'invoice', label: 'Invoice'  },
+    { val: 'receipt', label: 'Receipt'  },
+    { val: 'contact', label: 'Contact'  },
+    { val: 'pads',    label: 'Basic'    },
+  ];
+  var TPL_VAT_OPTS = [
+    { val: '',         label: 'Not set'   },
+    { val: 'none',     label: 'No tax'    },
+    { val: 'standard', label: 'Standard'  },
+    { val: 'zero',     label: 'Zero rate' },
+    { val: 'custom',   label: 'Custom %'  },
+  ];
 
   function fieldGroup(id, label, value, type) {
     return '<div class="field-group">' +
@@ -35,28 +60,31 @@
         var sent = records.filter(function(r) { return !r.receivedAt; }).length;
         var recv = records.filter(function(r) { return !!r.receivedAt; }).length;
         el.content.innerHTML =
+          '<div class="view-sec-hdr">Records</div>' +
           '<div class="view-field">' +
-            '<div class="view-field-label">Active records</div>' +
+            '<div class="view-field-label">Active</div>' +
             '<div class="view-field-value">' + sent + ' sent · ' + recv + ' received</div>' +
           '</div>' +
           '<div class="view-field" id="mgmt-arc-row" style="cursor:pointer;">' +
             '<div class="view-field-label">Archived</div>' +
             '<div class="view-field-value">' +
-              archived.length + ' records' +
+              archived.length +
               '<span class="badge" style="margin-left:8px;font-size:10px;">View</span>' +
             '</div>' +
           '</div>' +
+          '<div class="view-sec-hdr">Contacts</div>' +
           '<div class="view-field">' +
-            '<div class="view-field-label">Contacts (Block Registry)</div>' +
+            '<div class="view-field-label">Block Registry</div>' +
             '<div class="view-field-value">' + contacts + ' saved</div>' +
           '</div>' +
+          '<div class="view-sec-hdr">Storage</div>' +
           '<div class="view-field">' +
-            '<div class="view-field-label">Storage</div>' +
-            '<div class="view-field-value">~' + kb + ' KB used</div>' +
+            '<div class="view-field-label">Used</div>' +
+            '<div class="view-field-value">~' + kb + ' KB</div>' +
           '</div>' +
           '<div class="view-field">' +
             '<div class="view-field-label">Codec</div>' +
-            '<div class="view-field-value">pads-v1 (1pa/) + fflate</div>' +
+            '<div class="view-field-value">pads-v1 + fflate</div>' +
           '</div>';
         var arcRow = document.getElementById('mgmt-arc-row');
         if (arcRow) arcRow.addEventListener('click', function() { App.showArchive(); });
@@ -85,6 +113,19 @@
       html += '<option value="' + opts[i].id + '"' + sel + '>' + esc(opts[i].label) + '</option>';
     }
     return html + '</select>';
+  }
+
+  var FIN_CCY_OPTS = ['', 'GBP', 'USD', 'EUR', 'NGN', 'KES', 'ZAR', 'GHS', 'INR', 'AUD'];
+
+  function finCcySelectRow(id, label, current) {
+    var html = '<div class="field-group"><div class="field-label">' + esc(label) + '</div>' +
+      '<select class="field-input" id="' + id + '">';
+    for (var i = 0; i < FIN_CCY_OPTS.length; i++) {
+      var v = FIN_CCY_OPTS[i];
+      var lbl = v || '(profile default)';
+      html += '<option value="' + v + '"' + (v === current ? ' selected' : '') + '>' + esc(lbl) + '</option>';
+    }
+    return html + '</select></div>';
   }
 
   // ── Activities tab ─────────────────────────────────────────────────────
@@ -223,6 +264,255 @@
     }
   }
 
+  function tplScopeFilterBtn(val, label) {
+    var active = tplScopeTab === val ? ' active' : '';
+    return '<span class="tp-pad-btn' + active + '" data-tpl-scope="' + val + '">' + label + '</span>';
+  }
+
+  function tplLoadItems() {
+    if (tplMode === 'pending-list') {
+      return RecordTemplateService.listPendingImport();
+    }
+    if (tplScopeTab === 'imported') {
+      return RecordTemplateService.listImported();
+    }
+    return RecordTemplateService.listPersonal();
+  }
+
+  function tplPendingCount() {
+    return RecordTemplateService.listPendingImport().length;
+  }
+
+  // ── My Templates tab ─────────────────────────────────────────────────────
+
+  function tplTypeLabel(tpl) {
+    if (tpl.record_class === 'contact' || tpl.record_type === 'contact') return 'Contact';
+    if (tpl.record_class === 'pads')    return 'Basic';
+    for (var i = 0; i < TPL_TYPE_OPTS.length; i++) {
+      if (TPL_TYPE_OPTS[i].val === (tpl.record_type || '')) return TPL_TYPE_OPTS[i].label;
+    }
+    return 'Job';
+  }
+
+  function renderTemplates() {
+    if (tplMode === 'confirm-delete') { renderTplDeleteConfirm(); return; }
+
+    tplItems = tplLoadItems();
+    if (tplFocusIdx >= tplItems.length) tplFocusIdx = Math.max(0, tplItems.length - 1);
+
+    var pendingN = tplPendingCount();
+    var awaitBar = '';
+    if (tplMode === 'list' && tplScopeTab === 'imported' && pendingN > 0) {
+      awaitBar =
+        '<div class="act-item" data-tpl-await-bar="1" style="border:1px dashed var(--accent);cursor:pointer;">' +
+          '<span class="act-name" style="color:var(--accent);">' + pendingN + ' awaiting import</span>' +
+          '<span class="badge" style="font-size:9px;">Review</span>' +
+        '</div>';
+    }
+
+    var rows = tplItems.map(function(t, i) {
+      var foc = (tplFocusIdx === i) ? ' focused' : '';
+      var badge = tplMode === 'pending-list'
+        ? '<span class="badge" style="font-size:9px;margin-left:4px;">Awaiting</span>'
+        : '<span class="badge" style="font-size:9px;margin-left:4px;">' + esc(tplTypeLabel(t)) + '</span>';
+      var del = tplMode === 'pending-list' ? '' :
+        '<span class="act-del" data-tpl-del="' + esc(t.id) + '">\u00d7</span>';
+      return '<div class="act-item' + foc + '" data-tpl-idx="' + i + '">' +
+        '<span class="act-name">' + esc(t.name || '(unnamed)') + '</span>' + del + badge +
+      '</div>';
+    }).join('');
+
+    var scopeBar = tplMode === 'pending-list' ? '' :
+      '<div class="tp-pad-filters" style="margin-bottom:6px;">' +
+        tplScopeFilterBtn('personal', 'Personal') +
+        tplScopeFilterBtn('imported', 'Imported') +
+      '</div>';
+
+    var hdr = tplMode === 'pending-list'
+      ? '<div style="font-size:10px;color:var(--text-muted);padding:4px 10px 8px;">In storage but not imported. Import to add to My Templates.</div>'
+      : '';
+
+    var emptyMsg = tplMode === 'pending-list'
+      ? 'Nothing awaiting import.'
+      : (tplScopeTab === 'imported'
+        ? 'No imported templates yet.<br>Import external templates when you review them.'
+        : 'No personal templates yet.<br>Create one or save a record as template.');
+
+    var newRow = (tplMode === 'list' && tplScopeTab === 'personal')
+      ? '<div class="act-new-row">' +
+          '<span class="badge badge-accent act-add-btn" id="tpl-new-btn" style="width:100%;text-align:center;cursor:pointer;">+ New template</span>' +
+        '</div>'
+      : '';
+
+    el.content.innerHTML =
+      scopeBar + hdr + newRow + awaitBar +
+      (tplItems.length ? rows : '<div class="empty-state" style="font-size:11px;">' + emptyMsg + '</div>');
+
+    if (el.csk) {
+      if (tplMode === 'pending-list') el.csk.textContent = tplItems.length ? 'Import' : '';
+      else el.csk.textContent = tplItems.length ? 'Apply' : '';
+    }
+
+    var newBtn = document.getElementById('tpl-new-btn');
+    if (newBtn) newBtn.addEventListener('click', function() { App.showTemplateCreator({ returnTo: 'management' }); });
+
+    var awaitEl = el.content.querySelector('[data-tpl-await-bar]');
+    if (awaitEl) {
+      awaitEl.addEventListener('click', function() {
+        tplMode = 'pending-list'; tplFocusIdx = 0; renderTemplates();
+      });
+    }
+
+    var scopeBtns = el.content.querySelectorAll('[data-tpl-scope]');
+    for (var si = 0; si < scopeBtns.length; si++) {
+      scopeBtns[si].addEventListener('click', (function(btn) {
+        return function() {
+          tplScopeTab = btn.getAttribute('data-tpl-scope');
+          tplMode = 'list'; tplFocusIdx = 0; renderTemplates();
+        };
+      })(scopeBtns[si]));
+    }
+
+    var delBtns = el.content.querySelectorAll('[data-tpl-del]');
+    for (var di = 0; di < delBtns.length; di++) {
+      delBtns[di].addEventListener('click', (function(id) {
+        return function(e) { e.stopPropagation(); tplStartDelete(id); };
+      })(delBtns[di].getAttribute('data-tpl-del')));
+    }
+    var rows2 = el.content.querySelectorAll('.act-item[data-tpl-idx]');
+    for (var ri = 0; ri < rows2.length; ri++) {
+      rows2[ri].addEventListener('click', (function(idx) {
+        return function(e) {
+          if (e.target.classList.contains('act-del')) return;
+          tplFocusIdx = idx;
+          applyTplFocus();
+        };
+      })(ri));
+      rows2[ri].addEventListener('dblclick', (function(idx) {
+        return function() { tplFocusIdx = idx; tplDoPrimary(tplItems[idx]); };
+      })(ri));
+    }
+    applyTplFocus();
+  }
+
+  function tplDoPrimary(tpl) {
+    if (!tpl) return;
+    if (tplMode === 'pending-list') {
+      RecordTemplateService.importTemplate(tpl.id);
+      tplScopeTab = 'imported';
+      tplMode = 'list';
+      tplFocusIdx = 0;
+      renderTemplates();
+      return;
+    }
+    tplApply(tpl);
+  }
+
+  function applyTplFocus() {
+    var nodes = el.content.querySelectorAll('.act-item[data-tpl-idx]');
+    nodes.forEach(function(n) { n.classList.remove('focused'); });
+    if (tplFocusIdx >= 0 && tplFocusIdx < nodes.length) {
+      nodes[tplFocusIdx].classList.add('focused');
+      nodes[tplFocusIdx].scrollIntoView({ block: 'nearest' });
+    }
+    if (el.csk) el.csk.textContent = tplItems.length ? 'Apply' : '';
+  }
+
+  function tplStartDelete(id) {
+    tplDelPending = id;
+    tplMode = 'confirm-delete';
+    renderTemplates();
+  }
+
+  function renderTplDeleteConfirm() {
+    var tpl = RecordTemplateService.get(tplDelPending) || {};
+    el.content.innerHTML =
+      '<div class="act-del-prompt">' +
+        '<div class="act-del-title">Delete &ldquo;' + esc(tpl.name || 'template') + '&rdquo;?</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin:6px 0;">This cannot be undone.</div>' +
+        '<div class="act-del-actions">' +
+          '<span class="badge act-cancel-btn" id="tpl-del-cancel">Cancel</span>' +
+          '<span class="badge badge-danger act-confirm-btn" id="tpl-del-confirm">Delete</span>' +
+        '</div>' +
+      '</div>';
+    document.getElementById('tpl-del-cancel').addEventListener('click', function() {
+      tplDelPending = null; tplMode = 'list'; renderTemplates();
+    });
+    document.getElementById('tpl-del-confirm').addEventListener('click', function() {
+      RecordTemplateService.remove(tplDelPending);
+      tplDelPending = null; tplMode = 'list'; tplFocusIdx = 0;
+      renderTemplates();
+    });
+  }
+
+  function tplApply(tpl) {
+    if (!tpl) return;
+    var preFields = RecordTemplateService.buildRecord(tpl.id);
+    // Preserve record_type for routing; record_class determines wizard variant
+    var recClass = tpl.record_class || 'job';
+    preFields.record_class = recClass;
+    if (recClass !== 'contact' && recClass !== 'pads' && tpl.record_type) {
+      preFields.record_type = tpl.record_type;
+    }
+    RecordService.create(preFields).then(function(rec) {
+      App.showWizard(rec);
+    });
+  }
+
+  function tplOnKey(key) {
+    if (tplMode === 'confirm-delete') {
+      if (key === 'Backspace') { tplDelPending = null; tplMode = 'list'; renderTemplates(); }
+      return;
+    }
+    if (tplMode === 'pending-list') {
+      if (key === 'Backspace') {
+        tplMode = 'list'; tplScopeTab = 'imported'; tplFocusIdx = 0; renderTemplates();
+        return;
+      }
+      switch (key) {
+        case 'ArrowUp':
+          if (tplFocusIdx > 0) { tplFocusIdx--; applyTplFocus(); }
+          break;
+        case 'ArrowDown':
+          if (tplFocusIdx < tplItems.length - 1) { tplFocusIdx++; applyTplFocus(); }
+          break;
+        case 'Enter':
+        case 'SoftRight':
+          if (tplItems[tplFocusIdx]) {
+            if (key === 'SoftRight') {
+              App.showTemplateCreator({ editId: tplItems[tplFocusIdx].id, returnTo: 'management', adoptOnSave: true });
+            } else {
+              tplDoPrimary(tplItems[tplFocusIdx]);
+            }
+          }
+          break;
+      }
+      return;
+    }
+    switch (key) {
+      case 'ArrowUp':
+        if (tplFocusIdx > 0) { tplFocusIdx--; applyTplFocus(); }
+        break;
+      case 'ArrowDown':
+        if (tplFocusIdx < tplItems.length - 1) { tplFocusIdx++; applyTplFocus(); }
+        break;
+      case 'Enter': {
+        var ae2 = document.activeElement;
+        if (ae2 && (ae2.tagName === 'INPUT' || ae2.tagName === 'TEXTAREA')) return;
+        if (tplItems[tplFocusIdx]) tplDoPrimary(tplItems[tplFocusIdx]);
+        break;
+      }
+      case 'SoftRight':
+        if (tplItems[tplFocusIdx]) {
+          App.showTemplateCreator({ editId: tplItems[tplFocusIdx].id, returnTo: 'management' });
+        }
+        break;
+      case 'Backspace':
+        App.showList();
+        break;
+    }
+  }
+
   function renderSettings() {
     var act    = ActivityService.getActive() || {};
     var locale = ActivityService.getLocale();
@@ -232,8 +522,7 @@
     var countryFlag = (sel && CountryScreen.flagEmoji) ? CountryScreen.flagEmoji(sel.iso) + ' ' : '';
 
     el.content.innerHTML =
-      '<div style="padding:6px 10px 2px; font-size:10px; color:var(--text-muted);' +
-        ' text-transform:uppercase; letter-spacing:0.5px;">Profile</div>' +
+      '<div class="view-sec-hdr">Profile</div>' +
       fieldGroup('mgmt-name',  'Your name',         act.name  || '') +
       fieldGroup('mgmt-phone', 'Phone / WhatsApp',  act.phone || '', 'tel') +
       '<div class="field-group">' +
@@ -247,9 +536,17 @@
           '<span class="badge" style="margin-left:8px; font-size:10px;">Change</span>' +
         '</div>' +
       '</div>' +
-      '<div style="padding:6px 10px 2px; font-size:10px; color:var(--text-muted);' +
-        ' text-transform:uppercase; letter-spacing:0.5px; border-top:1px solid var(--border);' +
-        ' margin-top:4px;">App</div>' +
+      '<div class="view-sec-hdr">Finance overview</div>' +
+      finCcySelectRow('mgmt-fin-ccy-1', 'Primary currency', ActivityService.getFinPriority().primary) +
+      finCcySelectRow('mgmt-fin-ccy-2', 'Secondary currency', ActivityService.getFinPriority().secondary) +
+      '<div class="view-sec-hdr">App</div>' +
+      '<div class="view-field" id="mgmt-home-toggle" style="cursor:pointer;">' +
+        '<div class="view-field-label">Home Screen</div>' +
+        '<div class="view-field-value" id="mgmt-home-val">' +
+          (App.getHomeMode() === 'wp+' ? '<span class="badge badge-accent">WP+</span>' : '<span class="badge">Classic List</span>') +
+          ' <span style="font-size:10px; color:var(--text-muted);">tap to toggle</span>' +
+        '</div>' +
+      '</div>' +
       '<div class="view-field">' +
         '<div class="view-field-label">Version</div>' +
         '<div class="view-field-value">Workpads v0.2.0</div>' +
@@ -262,6 +559,18 @@
         '<div class="view-field-label">Platform</div>' +
         '<div class="view-field-value">KaiOS 3.x</div>' +
       '</div>';
+
+    var homeToggle = document.getElementById('mgmt-home-toggle');
+    if (homeToggle) {
+      homeToggle.addEventListener('click', function() {
+        var next = App.getHomeMode() === 'wp+' ? 'list' : 'wp+';
+        App.setHomeMode(next);
+        var val = document.getElementById('mgmt-home-val');
+        if (val) val.innerHTML = next === 'wp+'
+          ? '<span class="badge badge-accent">WP+</span> <span style="font-size:10px; color:var(--text-muted);">tap to toggle</span>'
+          : '<span class="badge">Classic List</span> <span style="font-size:10px; color:var(--text-muted);">tap to toggle</span>';
+      });
+    }
 
     var countryRow = document.getElementById('mgmt-country-row');
     if (countryRow) {
@@ -278,12 +587,17 @@
     var nameInp   = document.getElementById('mgmt-name');
     var phoneInp  = document.getElementById('mgmt-phone');
     var localeSel = document.getElementById('mgmt-locale');
+    var ccy1      = document.getElementById('mgmt-fin-ccy-1');
+    var ccy2      = document.getElementById('mgmt-fin-ccy-2');
     var name   = nameInp   ? nameInp.value.trim()  : '';
     var phone  = phoneInp  ? phoneInp.value.trim() : '';
     var locale = localeSel ? localeSel.value        : null;
-    if (!name) { if (nameInp) nameInp.focus(); return; }
-    ActivityService.update({ name: name, phone: phone });
     if (locale) ActivityService.setLocale(locale);
+    ActivityService.setFinPriority(
+      ccy1 ? ccy1.value : '',
+      ccy2 ? ccy2.value : ''
+    );
+    ActivityService.update({ name: name, phone: phone });
     renderSettings();
   }
 
@@ -295,42 +609,71 @@
     el.tabs.forEach(function(t) {
       t.classList.toggle('active', t.dataset.tab === tab);
     });
-    if (el.csk) el.csk.textContent = (tab === 'settings') ? 'Save' : '';
+    if (el.csk) el.csk.textContent = (tab === 'user') ? 'Save' : '';
     switch (tab) {
-      case 'records':    renderRecords();     break;
-      case 'activities': renderActivities();  break;
-      case 'personal':   renderPersonal();    break;
-      case 'settings':   renderSettings();    break;
+      case 'records':    renderRecords();                              break;
+      case 'activities': renderActivities();                           break;
+      case 'personal':   renderPersonal();                             break;
+      case 'templates':
+        tplMode = 'list'; tplFocusIdx = 0; renderTemplates();
+        break;
+      case 'user':       renderSettings();                             break;
     }
   }
 
   // ── Public API ─────────────────────────────────────────────────────────
 
-  function onShow() {
-    setTab('records');
+  function onShow(opts) {
+    opts = opts || {};
+    var tab = opts.tab;
+    if (tab === 'templates' || tab === 'user' || tab === 'records' ||
+        tab === 'personal' || tab === 'activities') {
+      setTab(tab);
+    } else {
+      setTab('records');
+    }
+    if (tab === 'templates') {
+      if (opts.tplScope === 'imported' || opts.tplScope === 'personal') {
+        tplScopeTab = opts.tplScope;
+      }
+      if (opts.tplMode === 'pending-list') {
+        tplScopeTab = 'imported';
+        tplMode = 'pending-list';
+        tplFocusIdx = 0;
+        renderTemplates();
+      }
+    }
   }
 
   function onKey(key) {
-    if (currentTab === 'activities') { actOnKey(key); return; }
-    var tabs = ['records', 'activities', 'personal', 'settings'];
+    // Tab order: User | Records | Personal | Activities | My Templates
+    var tabs = ['user', 'records', 'personal', 'activities', 'templates'];
     var idx  = tabs.indexOf(currentTab);
+
+    if (key === 'ArrowLeft') {
+      if (idx > 0) setTab(tabs[idx - 1]);
+      return;
+    }
+    if (key === 'ArrowRight') {
+      if (idx < tabs.length - 1) setTab(tabs[idx + 1]);
+      return;
+    }
+
+    if (currentTab === 'activities') { actOnKey(key); return; }
+    if (currentTab === 'templates')  { tplOnKey(key); return; }
+
     switch (key) {
-      case 'ArrowLeft':
-        if (idx > 0) setTab(tabs[idx - 1]);
-        break;
-      case 'ArrowRight':
-        if (idx < tabs.length - 1) setTab(tabs[idx + 1]);
-        break;
       case 'Enter':
-        if (currentTab === 'settings') saveProfile();
+        if (currentTab === 'user') saveProfile();
         break;
       case 'Backspace':
         App.showList();
         break;
-      case '1': setTab('records');     break;
-      case '2': setTab('personal');    break;
-      case '3': setTab('activities');  break;
-      case '4': setTab('settings');    break;
+      case '1': setTab('user');        break;
+      case '2': setTab('records');     break;
+      case '3': setTab('personal');    break;
+      case '4': setTab('activities');  break;
+      case '5': setTab('templates');   break;
     }
   }
 

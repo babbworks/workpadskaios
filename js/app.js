@@ -7,37 +7,76 @@
   'use strict';
 
   var SCREENS = {
-    onboarding: document.getElementById('screen-onboarding'),
-    country:    document.getElementById('screen-country'),
-    list:       document.getElementById('screen-list'),
-    wizard:     document.getElementById('screen-wizard'),
-    view:       document.getElementById('screen-view'),
+    onboarding:        document.getElementById('screen-onboarding'),
+    country:           document.getElementById('screen-country'),
+    help:              document.getElementById('screen-help'),
+    home:              document.getElementById('screen-home'),
+    'user-switcher':   document.getElementById('screen-user-switcher'),
+    'sale-tally':      document.getElementById('screen-sale-tally'),
+    'io-create':       document.getElementById('screen-io-create'),
+    list:              document.getElementById('screen-list'),
+    wizard:            document.getElementById('screen-wizard'),
+    view:              document.getElementById('screen-view'),
+    financial:         document.getElementById('screen-financial'),
+    'finance-overview': document.getElementById('screen-finance-overview'),
     'note-share': document.getElementById('screen-note-share'),
-    share:      document.getElementById('screen-share'),
-    management: document.getElementById('screen-management'),
-    ledger:     document.getElementById('screen-ledger'),
-    'newent-wizard': document.getElementById('screen-newent-wizard'),
-    archive:         document.getElementById('screen-archive'),
+    share:       document.getElementById('screen-share'),
+    management:  document.getElementById('screen-management'),
+    ledger:        document.getElementById('screen-ledger'),
+    liabilities:   document.getElementById('screen-liabilities'),
+    'newent-wizard':  document.getElementById('screen-newent-wizard'),
+    archive:             document.getElementById('screen-archive'),
+    'template-creator':  document.getElementById('screen-template-creator'),
+    timeline:            document.getElementById('screen-timeline'),
+    tasks:            document.getElementById('screen-tasks'),
+    'calendar-wp':    document.getElementById('screen-calendar-wp'),
+    chain:            document.getElementById('screen-chain'),
+    dispute:          document.getElementById('screen-dispute'),
   };
 
   var currentScreen = 'list';
+
+  // ── Home mode preference ───────────────────────────────────────────────────
+  // 'wp+' boots to WP+ home; anything else boots to classic list
+
+  function getHomeMode() { return localStorage.getItem('wp_home_mode') || 'list'; }
+  function setHomeMode(mode) { localStorage.setItem('wp_home_mode', mode); }
 
   // ── Shortcut maps (per screen) ─────────────────────────────────────────────
 
   var SHORTCUT_MAPS = {
     list: [
-      { key: '1', label: 'New record' },
+      { key: '1', label: 'New record / Outcome' },
+      { key: '2', label: 'Switch to WP+ home' },
       { key: '3', label: 'Filter by type' },
       { key: '4', label: 'New Exp/COGS/Inc' },
       { key: '5', label: 'Manage' },
       { key: '6', label: 'New Business' },
+      { key: '8', label: 'Sell (quick tally)' },
+      { key: '9', label: 'Finance overview' },
       { key: '0', label: 'Quick note' },
+    ],
+    'sale-tally': [
+      { key: '1', label: 'Another sale (same qty)' },
+      { key: '2', label: 'New qty' },
+      { key: 'RSK', label: 'Cash / Full mode' },
+      { key: 'CSK', label: 'Record sale' },
+    ],
+    'io-create': [
+      { key: 'CSK', label: 'Next / Save' },
+      { key: 'Back', label: 'Previous step' },
     ],
     view: [
       { key: 'CSK', label: 'Edit / Open (collapsed)' },
-      { key: '1',   label: 'Edit record' },
+      { key: '1',   label: 'Edit' },
       { key: '2',   label: 'Share' },
-      { key: '3',   label: 'Archive' },
+      { key: '3',   label: 'Financials' },
+      { key: '4',   label: 'View chain' },
+      { key: '5',   label: 'Archive' },
+      { key: '6',   label: 'Save template' },
+      { key: '7',   label: 'Close / commit' },
+      { key: '8',   label: 'Amend' },
+      { key: '9',   label: 'Dispute' },
       { key: '0',   label: 'Quick note' },
     ],
     wizard: [
@@ -53,8 +92,21 @@
       { key: '1', label: 'Records tab' },
       { key: '2', label: 'Personal tab' },
       { key: '3', label: 'Activities tab' },
-      { key: '4', label: 'Settings tab' },
+      { key: '4', label: 'My Templates' },
+      { key: '5', label: 'Settings tab' },
       { key: '0', label: 'Quick note' },
+    ],
+    ledger: [
+      { key: 'Enter', label: 'Save line' },
+      { key: 'Back',  label: 'Cancel' },
+    ],
+    liabilities: [
+      { key: 'Enter', label: 'Save' },
+      { key: 'Back',  label: 'Cancel' },
+    ],
+    financial: [
+      { key: 'Enter', label: 'Edit focused line' },
+      { key: 'Back',  label: 'Back to record' },
     ],
   };
 
@@ -64,8 +116,16 @@
   var quickNoteInput = document.getElementById('quicknote-input');
   var shortcutEl     = document.getElementById('overlay-shortcuts');
   var shortcutsEl    = document.getElementById('shortcuts-content');
+  var receivePpEl    = document.getElementById('overlay-receive-pp');
+  var receivePpInput = document.getElementById('receive-pp-input');
+  var receivePpError = document.getElementById('receive-pp-error');
+  var receiveNoteEl  = document.getElementById('overlay-receive-note');
   var quickNoteOpen  = false;
   var shortcutOpen   = false;
+  var receivePpOpen  = false;
+  var receivePpHash  = '';     // raw URL hash held while awaiting passphrase
+  var receiveNoteOpen = false;
+  var receiveNoteObj  = null;
 
   // ── Screen transitions ─────────────────────────────────────────────────────
 
@@ -78,9 +138,47 @@
     currentScreen = name;
   }
 
-  function showList() {
+  function showHelp(opts) {
+    showScreen('help');
+    HelpScreen.onShow(opts || {});
+  }
+
+  function showHome() {
+    showScreen('home');
+    HomeScreen.onShow();
+    if (typeof WorkpadsPanel !== 'undefined') {
+      WorkpadsPanel.setContext({ screen: 'home' });
+    }
+  }
+
+  function showList(opts) {
     showScreen('list');
-    ListScreen.onShow();
+    ListScreen.onShow(opts || null);
+  }
+
+  function showSaleTally(opts) {
+    showScreen('sale-tally');
+    if (SaleTallyScreen && SaleTallyScreen.onShow) SaleTallyScreen.onShow(opts || {});
+  }
+
+  function showIOCreate(opts) {
+    showScreen('io-create');
+    if (IOCreateScreen && IOCreateScreen.onShow) IOCreateScreen.onShow(opts || {});
+  }
+
+  function showTimeline() {
+    showScreen('timeline');
+    TimelineScreen.onShow();
+  }
+
+  function showTasks() {
+    showScreen('tasks');
+    TasksScreen.onShow();
+  }
+
+  function showCalendarWP() {
+    showScreen('calendar-wp');
+    CalendarWPScreen.onShow();
   }
 
   function showWizard(record, opts) {
@@ -89,8 +187,21 @@
   }
 
   function showView(record) {
+    if (currentScreen === 'list' && ListScreen.saveNavState) {
+      ListScreen.saveNavState();
+    }
     showScreen('view');
     ViewScreen.onShow(record);
+  }
+
+  function showFinancial(record) {
+    showScreen('financial');
+    FinancialScreen.onShow(record);
+  }
+
+  function showFinanceOverview() {
+    showScreen('finance-overview');
+    FinanceOverviewScreen.onShow();
   }
 
   function showShare(record) {
@@ -103,9 +214,9 @@
     NoteShareScreen.onShow(capture);
   }
 
-  function showManagement() {
+  function showManagement(opts) {
     showScreen('management');
-    ManagementScreen.onShow();
+    ManagementScreen.onShow(opts || {});
   }
 
   function showActivities() {
@@ -113,9 +224,23 @@
     ManagementScreen.showTab('activities');
   }
 
+  function showTemplates(opts) {
+    showManagement(Object.assign ? Object.assign({ tab: 'templates' }, opts || {}) : merge({ tab: 'templates' }, opts || {}));
+  }
+
+  function showTemplateCreator(opts) {
+    showScreen('template-creator');
+    TemplateCreatorScreen.onShow(opts || {});
+  }
+
   function showLedger(opts) {
     showScreen('ledger');
     LedgerScreen.onShow(opts || {});
+  }
+
+  function showLiabilities(opts) {
+    showScreen('liabilities');
+    LiabilitiesScreen.onShow(opts || {});
   }
 
   function showNewEntWizard(existingSlug) {
@@ -133,11 +258,48 @@
     ArchiveScreen.onShow();
   }
 
+  function showChain(opts) {
+    showScreen('chain');
+    ChainScreen.onShow(opts || {});
+  }
+
+  function showDispute(opts) {
+    showScreen('dispute');
+    DisputeScreen.onShow(opts || {});
+  }
+
+  // prefillRecord — used by ctrig.js obligation evaluator to route triggered forms
+  // type: 'state_commit' | 'dispute' | 'amendment' | any wizard-openable type
+  // fields: partial record object pre-populated for the wizard
+  function prefillRecord(type, fields) {
+    var base = fields || {};
+    if (type === 'state_commit') {
+      if (ViewScreen && ViewScreen.openCommitPickerFor) {
+        ViewScreen.openCommitPickerFor(base);
+        return;
+      }
+    }
+    if (type === 'dispute' && currentScreen === 'view' && currentRecord) {
+      App.showDispute({ sourceRecord: currentRecord });
+      return;
+    }
+    if (type === 'payment_request' || type === 'obligation') {
+      showLedger({ type: 'payment', description: base.job || base.description || '' });
+      return;
+    }
+    showWizard(merge({ record_type: type || 'pads' }, base));
+  }
+
+  function showUserSwitcher() {
+    showScreen('user-switcher');
+    UserSwitcherScreen.onShow();
+  }
+
   // ── Panel helpers ──────────────────────────────────────────────────────────
 
   function closeAllPanels() {
-    WorkpadsPanel.close();
-    PersonalPanel.close();
+    if (typeof WorkpadsPanel !== 'undefined' && WorkpadsPanel.close) WorkpadsPanel.close();
+    if (typeof PersonalPanel !== 'undefined' && PersonalPanel.close) PersonalPanel.close();
   }
 
   function anyPanelOpen() {
@@ -150,7 +312,7 @@
   }
 
   function isAnyOverlayOpen() {
-    return quickNoteOpen || shortcutOpen ||
+    return quickNoteOpen || shortcutOpen || receivePpOpen || receiveNoteOpen ||
       (ViewScreen && ViewScreen.isOptionsOpen && ViewScreen.isOptionsOpen());
   }
 
@@ -256,12 +418,94 @@
   function checkIncomingUrl() {
     var hash = window.location.hash.slice(1);
     if (!hash) return;
+
+    // External My Template payload: #rtpl/<base64url JSON>
+    if (hash.slice(0, 5) === 'rtpl/') {
+      try {
+        var rtplB64 = hash.slice(5).replace(/-/g, '+').replace(/_/g, '/');
+        while (rtplB64.length % 4) rtplB64 += '=';
+        var rtplFields = JSON.parse(atob(rtplB64));
+        if (typeof RecordTemplateService !== 'undefined' && RecordTemplateService.receiveExternal) {
+          RecordTemplateService.receiveExternal(rtplFields);
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          showManagement();
+          if (typeof ManagementScreen !== 'undefined' && ManagementScreen.showTab) {
+            ManagementScreen.showTab('templates');
+          }
+        }
+      } catch (rtplErr) {
+        console.warn('[workpads] Record template receive failed:', rtplErr.message);
+      }
+      return;
+    }
+
+    // Presentation template install (#t/ / #te/) — TemplateRegistry, not record presets
+    if (hash.slice(0, 2) === 't/' || hash.slice(0, 3) === 'te/') {
+      if (typeof TemplateRegistry !== 'undefined' && TemplateRegistry.installFromUrlHash) {
+        var tplResult = TemplateRegistry.installFromUrlHash(hash);
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        if (tplResult.ok) {
+          showManagement();
+          if (typeof ManagementScreen !== 'undefined' && ManagementScreen.showTab) {
+            ManagementScreen.showTab('templates');
+          }
+          return;
+        }
+        if (tplResult.error === 'encrypted-template-deferred') {
+          console.warn('[workpads] Encrypted template install (#te/) not yet supported.');
+        } else if (tplResult.error !== 'template-ref-only') {
+          console.warn('[workpads] Template install failed:', tplResult.error);
+        }
+      }
+      return;
+    }
+
+    // Note fragment: workpads.me/n#n1/...
+    if (hash.slice(0, 3) === 'n1/') {
+      try {
+        var note = (typeof NoteCodec !== 'undefined') ? NoteCodec.decode(hash) : null;
+        if (note && note.text) { showReceivedNote(note); return; }
+      } catch (_) {}
+      return;
+    }
+
     var looksLike = /^[0-9][a-z][a-z]\//.test(hash) || hash.indexOf('alg=') !== -1;
     if (!looksLike) return;
+
+    // Detect tag (first 4 chars: e.g. "1pa/", "1ps/", "1ph/")
+    var tag = hash.slice(0, 4);
+
+    // Scrambled tags require passphrase — show overlay
+    if (tag === '1ps/' || tag === '1ph/') {
+      openReceivePp(hash);
+      return;
+    }
+
+    // Plain / presentation tags — decode directly
     try {
+      var isPresentation = (tag === '1pb/' || tag === '1pf/');
       var rec = RecordService.decodeUrl(hash);
-      RecordService.storeReceived(rec).then(function(stored) { showView(stored); });
-    } catch (e) {}
+      RecordService.storeReceived(rec).then(function(stored) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        if (isPresentation && stored.trigDisplay && stored.trigDisplay.mode === 2 &&
+            stored.formSchema && global.WPTrig) {
+          App.showWizard(merge({
+            record_type: 'pads',
+            job: stored.job,
+            customer: stored.customer,
+            displaySchema: stored.displaySchema,
+            formSchema: stored.formSchema,
+            trigDisplay: stored.trigDisplay
+          }, stored));
+          return;
+        }
+        showView(stored);
+      }).catch(function(err) {
+        console.warn('[workpads] Store received failed:', err && err.message ? err.message : err);
+      });
+    } catch (e) {
+      console.warn('[workpads] URL decode failed:', e.message);
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -304,17 +548,57 @@
   //   Used by both keydown (delegateToScreen) and keyup (CSK hold release).
   //   Add new screens here and nowhere else.
   //
+  // ── Camera ────────────────────────────────────────────────────────────────
+
+  function launchCamera() {
+    if (window.MozActivity) {
+      var act = new window.MozActivity({ name: 'pick', data: { type: ['image/png', 'image/jpg', 'image/jpeg'] } });
+      act.onsuccess = function() {
+        var blob = this.result && this.result.blob;
+        showWizard(null, { defaultType: 'log', pendingAttachment: blob || null });
+      };
+      act.onerror = function() { /* cancelled */ };
+    } else {
+      var inp = document.createElement('input');
+      inp.type = 'file';
+      inp.accept = 'image/*';
+      inp.setAttribute('capture', 'camera');
+      inp.style.display = 'none';
+      document.body.appendChild(inp);
+      inp.addEventListener('change', function() {
+        var blob = inp.files && inp.files[0] ? inp.files[0] : null;
+        document.body.removeChild(inp);
+        showWizard(null, { defaultType: 'log', pendingAttachment: blob });
+      });
+      inp.click();
+    }
+  }
+
   var SCREEN_HANDLERS = {
-    list:            ListScreen,
-    country:         CountryScreen,
-    wizard:          WizardScreen,
-    view:            ViewScreen,
-    share:           ShareScreen,
-    'note-share':    NoteShareScreen,
-    management:      ManagementScreen,
-    ledger:          LedgerScreen,
-    'newent-wizard': NewEntWizardScreen,
-    archive:         ArchiveScreen,
+    help:               HelpScreen,
+    home:               HomeScreen,
+    'user-switcher':    UserSwitcherScreen,
+    'sale-tally':       SaleTallyScreen,
+    'io-create':        IOCreateScreen,
+    list:               ListScreen,
+    country:            CountryScreen,
+    wizard:             WizardScreen,
+    view:               ViewScreen,
+    financial:          FinancialScreen,
+    'finance-overview': FinanceOverviewScreen,
+    share:              ShareScreen,
+    'note-share':       NoteShareScreen,
+    management:         ManagementScreen,
+    ledger:             LedgerScreen,
+    liabilities:        LiabilitiesScreen,
+    'newent-wizard':    NewEntWizardScreen,
+    archive:              ArchiveScreen,
+    'template-creator':   TemplateCreatorScreen,
+    timeline:             TimelineScreen,
+    tasks:              TasksScreen,
+    'calendar-wp':      CalendarWPScreen,
+    chain:              ChainScreen,
+    dispute:            DisputeScreen,
   };
 
   // ── Layer 1: Overlay key trap ─────────────────────────────────────────────
@@ -324,11 +608,22 @@
   //   Shortcut map: any key dismisses it.
   //
   function handleOverlayKeys(key, e) {
+    if (receiveNoteOpen) {
+      if (key === 'SoftLeft' || key === 'Backspace') { closeReceivedNote(); e.preventDefault(); }
+      else if (key === 'SoftRight' || key === 'Enter') { saveReceivedNote(); e.preventDefault(); }
+      return true;
+    }
+    if (receivePpOpen) {
+      if (key === 'SoftLeft' || key === 'Backspace')    { closeReceivePp(); e.preventDefault(); }
+      else if (key === 'SoftRight')                     { confirmReceivePp(); e.preventDefault(); }
+      else if (key === 'Enter' && !isFocusInInput())    { confirmReceivePp(); e.preventDefault(); }
+      return true;
+    }
     if (quickNoteOpen) {
       if (key === 'SoftLeft')                           { closeQuickNote(); e.preventDefault(); }
       else if (key === 'SoftRight')                     { saveQuickNote();  e.preventDefault(); }
       else if (key === 'Enter' && !isFocusInInput())    { saveQuickNote();  e.preventDefault(); }
-      return true; // absorb even keys not matched above
+      return true;
     }
     if (shortcutOpen) {
       closeShortcutMap();
@@ -336,6 +631,100 @@
       return true;
     }
     return false;
+  }
+
+  // ── Receive passphrase overlay ────────────────────────────────────────────
+
+  function openReceivePp(hash) {
+    receivePpHash  = hash;
+    receivePpOpen  = true;
+    receivePpError.style.display = 'none';
+    receivePpInput.value = '';
+    receivePpEl.style.display = 'flex';
+    setTimeout(function() { receivePpInput.focus(); }, 60);
+  }
+
+  function closeReceivePp() {
+    receivePpOpen = false;
+    receivePpEl.style.display = 'none';
+    receivePpHash = '';
+    showList();
+  }
+
+  function confirmReceivePp() {
+    var passphrase = receivePpInput.value.trim();
+    if (!passphrase) {
+      receivePpError.textContent = 'Passphrase required.';
+      receivePpError.style.display = 'block';
+      return;
+    }
+    try {
+      var decoded = WPSecurity.secureDecode(receivePpHash, passphrase);
+      receivePpOpen = false;
+      receivePpEl.style.display = 'none';
+      receivePpHash = '';
+      RecordService.storeReceived(decoded).then(function(stored) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        showView(stored);
+      }).catch(function(err) {
+        receivePpError.textContent = 'Could not store: ' + (err && err.message ? err.message : 'unknown');
+        receivePpError.style.display = 'block';
+      });
+    } catch (err) {
+      receivePpError.textContent = err.message.indexOf('KEY_HINT') !== -1
+        ? 'Wrong passphrase — please try again.'
+        : 'Could not decode: ' + err.message;
+      receivePpError.style.display = 'block';
+      receivePpInput.select();
+    }
+  }
+
+  // ── Receive Note overlay ──────────────────────────────────────────────────
+
+  function showReceivedNote(note) {
+    receiveNoteObj  = note;
+    receiveNoteOpen = true;
+    if (!receiveNoteEl) return;
+
+    var bodyEl   = document.getElementById('rn-body');
+    var metaEl   = document.getElementById('rn-meta');
+    var recEl    = document.getElementById('rn-record');
+    var saveBtn  = document.getElementById('rn-save-btn');
+    var dismissBtn = document.getElementById('rn-dismiss-btn');
+
+    if (metaEl) {
+      var ts = note.ts ? new Date(note.ts).toLocaleDateString() : '';
+      metaEl.textContent = ts ? 'Received \u00b7 ' + ts : 'Received note';
+    }
+    if (bodyEl) bodyEl.textContent = note.text || '';
+    if (recEl) {
+      if (note.rec && (note.rec.job || note.rec.customer)) {
+        recEl.textContent = '\u21b3 ' + (note.rec.job || note.rec.customer || '');
+        recEl.style.display = 'block';
+      } else {
+        recEl.style.display = 'none';
+      }
+    }
+    if (saveBtn) saveBtn.onclick = function() { saveReceivedNote(); };
+    if (dismissBtn) dismissBtn.onclick = function() { closeReceivedNote(); };
+
+    receiveNoteEl.style.display = 'flex';
+  }
+
+  function closeReceivedNote() {
+    receiveNoteOpen = false;
+    receiveNoteObj  = null;
+    if (receiveNoteEl) receiveNoteEl.style.display = 'none';
+    window.location.hash = '';
+  }
+
+  function saveReceivedNote() {
+    if (!receiveNoteObj) return;
+    PersonalService.capture({
+      text:   receiveNoteObj.text,
+      source: 'received-note',
+      tags:   [],
+    }).then(function() { closeReceivedNote(); });
   }
 
   // ── Layer 2: Softkey panel toggles ────────────────────────────────────────
@@ -346,6 +735,21 @@
   //
   function handleSoftkeyPanels(key, e) {
     if (currentScreen === 'onboarding') return false;
+    if (currentScreen === 'template-creator') return false;
+    if (currentScreen === 'sale-tally' || currentScreen === 'io-create') {
+      if (key === 'SoftLeft' || key === 'SoftRight' || key === 'Enter') {
+        var h = SCREEN_HANDLERS[currentScreen];
+        if (key === 'Enter' || key === 'SoftRight') {
+          if (h && h.onCsk) h.onCsk();
+          else if (h && h.onKey) h.onKey(key === 'Enter' ? 'Enter' : 'SoftRight');
+        } else if (h && h.onKey) {
+          h.onKey(key);
+        }
+        e.preventDefault();
+        return true;
+      }
+      return false;
+    }
     if (key === 'SoftLeft')  { WorkpadsPanel.toggle(); e.preventDefault(); return true; }
     if (key === 'SoftRight') { PersonalPanel.toggle(); e.preventDefault(); return true; }
     return false;
@@ -424,6 +828,11 @@
       // Panel's quick-create buttons handle 1/2/3 internally; just prevent close
       e.preventDefault();
 
+    } else if (key === 'Backspace' && WorkpadsPanel.isOpen()) {
+      if (WorkpadsPanel.handleBackKey && WorkpadsPanel.handleBackKey()) { e.preventDefault(); return; }
+      closeAllPanels();
+      e.preventDefault();
+
     } else {
       // Unknown key while panel open — close the panel cleanly
       closeAllPanels();
@@ -461,6 +870,8 @@
       return true;
     }
     if (key === '*') {
+      // Template creator uses * for block insertion — let it handle the key
+      if (currentScreen === 'template-creator') return false;
       showShortcutMap();
       e.preventDefault();
       return true;
@@ -472,8 +883,9 @@
           openQuickNote();
         }, 800);
       }
-      // Do NOT preventDefault or return true here — the keyup listener resolves
-      // whether this was a short-press (delegate to screen) or hold (quick note).
+      // Return true so keydown does NOT also delegate to screen.
+      // The keyup listener resolves short-press (delegate) vs hold (quick note).
+      return true;
     }
     return false;
   }
@@ -539,6 +951,12 @@
   if (qnSaveBtn)   qnSaveBtn.addEventListener('click',   function() { saveQuickNote(); });
   if (qnCancelBtn) qnCancelBtn.addEventListener('click', function() { closeQuickNote(); });
 
+  // Receive passphrase overlay buttons
+  var rppCancelBtn = document.getElementById('rpp-cancel-btn');
+  var rppOpenBtn   = document.getElementById('rpp-open-btn');
+  if (rppCancelBtn) rppCancelBtn.addEventListener('click', function() { closeReceivePp(); });
+  if (rppOpenBtn)   rppOpenBtn.addEventListener('click',   function() { confirmReceivePp(); });
+
   // Ledger CSK (Save) button
   var ledgerCsk = document.getElementById('ledger-csk');
   if (ledgerCsk) {
@@ -548,26 +966,49 @@
   }
 
   global.App = {
+    showHelp:          showHelp,
+    showHome:          showHome,
     showList:          showList,
+    showSaleTally:     showSaleTally,
+    showIOCreate:      showIOCreate,
     showWizard:        showWizard,
     showView:          showView,
+    showFinancial:     showFinancial,
+    showFinanceOverview: showFinanceOverview,
     showShare:         showShare,
     showNoteShare:     showNoteShare,
     showManagement:    showManagement,
     showActivities:    showActivities,
-    showCountry:       showCountry,
+    showTemplates:        showTemplates,
+    showTemplateCreator:  showTemplateCreator,
+    showCountry:          showCountry,
     showLedger:        showLedger,
+    showLiabilities:   showLiabilities,
     showNewEntWizard:  showNewEntWizard,
     showArchive:       showArchive,
+    showUserSwitcher:  showUserSwitcher,
+    showTimeline:      showTimeline,
+    showTasks:         showTasks,
+    showCalendarWP:    showCalendarWP,
+    showChain:         showChain,
+    showDispute:       showDispute,
+    prefillRecord:     prefillRecord,
+    launchCamera:      launchCamera,
+    getHomeMode:       getHomeMode,
+    setHomeMode:       setHomeMode,
     openQuickNote:     openQuickNote,
     SHORTCUT_MAPS:     SHORTCUT_MAPS,
     getCurrentScreen:  function() { return currentScreen; },
   };
 
+  if (global.UIPhase && global.UIPhase.onBoot) global.UIPhase.onBoot();
+
   checkIncomingUrl();
 
   if (!ActivityService.hasAny()) {
     showOnboarding();
+  } else if (getHomeMode() === 'wp+') {
+    showHome();
   } else {
     showList();
   }

@@ -33,7 +33,7 @@
 
   function close() {
     isOpen = false;
-    el.panel.classList.remove('open');
+    if (el.panel) el.panel.classList.remove('open');
     document.body.classList.remove('pp-panel-open');
     WorkpadsPanel.hideBackdrop();
   }

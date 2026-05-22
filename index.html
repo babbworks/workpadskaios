@@ -68,8 +68,40 @@
     </div>
   </div>
 
+  <!-- ── Sale tally (market) ─────────────────────────────────────────────── -->
+  <div id="screen-sale-tally" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label" id="sale-tally-title">Sell</span>
+      <span class="sc-back" onclick="SaleTallyScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="content" id="sale-tally-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Back</span>
+      <span class="sk-csk" id="sale-tally-csk">Record</span>
+      <span class="sk-rsk">Full</span>
+    </div>
+  </div>
+
+  <!-- ── Outcome-only create ─────────────────────────────────────────────── -->
+  <div id="screen-io-create" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label" id="io-create-title">New Outcome</span>
+      <span class="sc-back" onclick="IOCreateScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="content" id="io-create-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Back</span>
+      <span class="sk-csk" id="io-create-csk">Next</span>
+      <span class="sk-rsk"></span>
+    </div>
+  </div>
+
   <!-- ── Main record list ─────────────────────────────────────────────────── -->
   <div id="screen-list" class="screen active">
+    <div id="list-crumb" class="screen-crumb" style="display:none;">
+      <span class="sc-label" id="list-crumb-label"></span>
+      <span class="sc-back" id="list-crumb-back">&#8249; Back</span>
+    </div>
     <div class="content" id="list-content"></div>
     <div class="softkeys">
       <span class="sk-lsk">Info</span>
@@ -119,10 +151,99 @@
       <input  id="view-search"  class="view-tb-search" type="text" placeholder="Search&#x2026;" autocomplete="off" autocorrect="off" spellcheck="false">
     </div>
     <div class="content" id="view-content"></div>
+    <div id="view-ack-bar" style="display:none; padding:6px 12px; background:var(--bg2); border-top:1px solid var(--border); font-size:10px; align-items:center; justify-content:space-between; flex-shrink:0;"></div>
     <div class="softkeys">
       <span class="sk-lsk">Info</span>
       <span class="sk-csk" id="view-csk">Edit</span>
       <span class="sk-rsk">Me</span>
+    </div>
+  </div>
+
+  <!-- ── Help screen ──────────────────────────────────────────────────────── -->
+  <div id="screen-help" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label">Help</span>
+      <span class="sc-back" id="help-back-link" onclick="HelpScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="view-toolbar" id="help-toolbar">
+      <input class="view-search" id="help-search" type="text" placeholder="Search help&#x2026;" autocomplete="off">
+      <div class="view-tb-toggle" id="help-toggle-btn"></div>
+    </div>
+    <div class="content" id="help-content" style="overflow-y:auto;"></div>
+    <div class="softkeys">
+      <span class="sk-lsk"></span>
+      <span class="sk-csk" id="help-csk">Back</span>
+      <span class="sk-rsk">Back</span>
+    </div>
+  </div>
+
+  <!-- ── WP+ Home screen ─────────────────────────────────────────────────── -->
+  <div id="screen-home" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label" id="home-greeting">Hello</span>
+    </div>
+    <div class="content" id="home-content" style="overflow-y:auto;"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Info</span>
+      <span class="sk-csk">Select</span>
+      <span class="sk-rsk">List</span>
+    </div>
+  </div>
+
+  <!-- ── User Switcher screen ─────────────────────────────────────────────── -->
+  <div id="screen-user-switcher" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label">Users</span>
+      <span class="sc-back" onclick="App.showList()">&#8249; Back</span>
+    </div>
+    <div class="content" id="usw-content" style="overflow-y:auto; padding:0;"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Back</span>
+      <span class="sk-csk">Switch</span>
+      <span class="sk-rsk"></span>
+    </div>
+  </div>
+
+  <!-- ── Timeline screen ──────────────────────────────────────────────────── -->
+  <div id="screen-timeline" class="screen">
+    <div class="screen-crumb" style="justify-content:space-between;">
+      <span class="sc-back" id="tl-prev-btn" style="flex:0 0 auto; cursor:pointer;">&#9664;</span>
+      <span class="sc-label" id="tl-date-label" style="flex:1; text-align:center;">Timeline</span>
+      <span class="sc-back" id="tl-next-btn" style="flex:0 0 auto; cursor:pointer;">&#9654;</span>
+    </div>
+    <div class="content" id="timeline-content" style="overflow-y:auto; padding:0;"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">&#9664; Day</span>
+      <span class="sk-csk">New Log</span>
+      <span class="sk-rsk">Home</span>
+    </div>
+  </div>
+
+  <!-- ── Tasks screen ─────────────────────────────────────────────────────── -->
+  <div id="screen-tasks" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label">Tasks</span>
+      <span class="sc-back" onclick="TasksScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="content" id="tasks-content" style="overflow-y:auto;"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Info</span>
+      <span class="sk-csk">Open</span>
+      <span class="sk-rsk">Home</span>
+    </div>
+  </div>
+
+  <!-- ── Calendar (WP) screen ─────────────────────────────────────────────── -->
+  <div id="screen-calendar-wp" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label">Calendar</span>
+      <span class="sc-back" onclick="CalendarWPScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="content" id="calwp-content" style="overflow-y:auto;"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">&#9664; Earlier</span>
+      <span class="sk-csk">View</span>
+      <span class="sk-rsk">Home</span>
     </div>
   </div>
 
@@ -140,6 +261,34 @@
     </div>
   </div>
 
+  <!-- ── Finance overview screen ──────────────────────────────────────────── -->
+  <div id="screen-finance-overview" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label">Finance Overview</span>
+      <span class="sc-back" onclick="FinanceOverviewScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="content" id="finance-overview-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Info</span>
+      <span class="sk-csk"></span>
+      <span class="sk-rsk">Me</span>
+    </div>
+  </div>
+
+  <!-- ── Financial detail screen ─────────────────────────────────────────── -->
+  <div id="screen-financial" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label" id="financial-title">Finance</span>
+      <span class="sc-back" onclick="FinancialScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="content" id="financial-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Info</span>
+      <span class="sk-csk">Edit</span>
+      <span class="sk-rsk">Me</span>
+    </div>
+  </div>
+
   <!-- ── Share screen ─────────────────────────────────────────────────────── -->
   <div id="screen-share" class="screen">
     <div class="screen-crumb">
@@ -150,7 +299,7 @@
     <div class="softkeys">
       <span class="sk-lsk">Info</span>
       <span class="sk-csk">Copy</span>
-      <span class="sk-rsk">Me</span>
+      <span class="sk-rsk">Select</span>
     </div>
   </div>
 
@@ -161,10 +310,11 @@
       <span class="sc-back" onclick="ManagementScreen.onKey('Backspace')">&#8249; Back</span>
     </div>
     <div class="wizard-progress" id="mgmt-tabs">
+      <span class="wizard-tab" data-tab="user">User</span>
       <span class="wizard-tab active" data-tab="records">Records</span>
       <span class="wizard-tab" data-tab="personal">Personal</span>
       <span class="wizard-tab" data-tab="activities">Activities</span>
-      <span class="wizard-tab" data-tab="settings">Settings</span>
+      <span class="wizard-tab" data-tab="templates">My Templates</span>
     </div>
     <div class="content" id="mgmt-content"></div>
     <div class="softkeys">
@@ -208,6 +358,40 @@
     </div>
   </div>
 
+  <!-- ── Liabilities screen (Payable / Receivable / Loan) ──────────────── -->
+  <div id="screen-liabilities" class="screen">
+    <div class="screen-crumb ledger-crumb">
+      <span class="sc-label" id="liab-title">New Entry</span>
+      <span class="sc-back" onclick="LiabilitiesScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="ledger-type-tabs" id="liab-type-tabs">
+      <span class="ledger-tab active" data-ltype="payable">Payable</span>
+      <span class="ledger-tab" data-ltype="receivable">Receivable</span>
+      <span class="ledger-tab" data-ltype="loan">Loan</span>
+    </div>
+    <div class="content" id="liab-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk" id="liab-lsk"></span>
+      <span class="sk-csk" id="liab-csk">Save</span>
+      <span class="sk-rsk"></span>
+    </div>
+  </div>
+
+  <!-- ── Template Creator screen ────────────────────────────────────────── -->
+  <div id="screen-template-creator" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label" id="tc-title">Template</span>
+      <span class="sc-back" onclick="TemplateCreatorScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="tc-step-bar" id="tc-step-bar">Step 1 of 5</div>
+    <div class="content" id="tc-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Back</span>
+      <span class="sk-csk" id="tc-csk">Next</span>
+      <span class="sk-rsk" id="tc-rsk"></span>
+    </div>
+  </div>
+
   <!-- ── Archive screen ─────────────────────────────────────────────────── -->
   <div id="screen-archive" class="screen">
     <div class="screen-crumb">
@@ -222,6 +406,32 @@
     </div>
   </div>
 
+  <!-- ── Chain screen ───────────────────────────────────────────────────── -->
+  <!-- ── Dispute screen ──────────────────────────────────────────────────── -->
+  <div id="screen-dispute" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label" id="dispute-crumb-label">Dispute</span>
+      <span class="sc-back" id="dispute-crumb-back">&#8249; Back</span>
+    </div>
+    <div class="dp-toolbar">
+      <input id="dispute-search" class="dp-search" type="text" placeholder="Search fields&#x2026;" autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div id="dispute-content" class="content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk"></span>
+      <span class="sk-csk" id="dispute-csk"></span>
+      <span class="sk-rsk"></span>
+    </div>
+  </div>
+
+  <div id="screen-chain" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label" id="chain-crumb-label">Chain</span>
+      <span class="sc-back" id="chain-crumb-back">&#8249; Back</span>
+    </div>
+    <div id="chain-content" class="content"></div>
+  </div>
+
   <!-- ── Panel backdrop (country image, z-index 98) ───────────────────────── -->
   <div id="panel-backdrop"></div>
 
@@ -230,9 +440,10 @@
     <div class="panel-header pb-header" id="panel-workpads-header">
       <span class="pb-logo">W</span>
       <div class="pb-hicons">
-        <div class="pb-hicon pb-hicon-dollar" id="pb-btn-financial">$</div>
-        <div class="pb-hicon pb-hicon-act"    id="pb-btn-activity">A</div>
-        <div class="pb-hicon"                 id="pb-btn-settings">&#9881;</div>
+        <div class="pb-hicon pb-hicon-dollar"    id="pb-btn-financial">$</div>
+        <div class="pb-hicon pb-hicon-act"       id="pb-btn-activity">A</div>
+        <div class="pb-hicon pb-hicon-contacts"  id="pb-btn-contacts">&#9742;</div>
+        <div class="pb-hicon pb-acct-switch"     id="pb-btn-switch">&#8644;</div>
       </div>
     </div>
     <div class="panel-content" id="panel-workpads-content"></div>
@@ -264,6 +475,40 @@
     </div>
   </div>
 
+  <!-- ── Commit picker overlay ───────────────────────────────────────────── -->
+  <div id="overlay-commit" style="display:none; position:absolute; top:0; left:0; width:240px; height:320px; background:rgba(0,0,0,0.88); z-index:200; flex-direction:column;">
+    <div style="height:32px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 10px; font-size:12px; font-weight:bold; color:var(--text); flex-shrink:0;">Close / Commit</div>
+    <div id="commit-content" style="flex:1; overflow-y:auto;"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Cancel</span>
+      <span class="sk-csk">Select</span>
+      <span class="sk-rsk"></span>
+    </div>
+  </div>
+
+  <!-- ── Progression picker overlay ─────────────────────────────────────── -->
+  <div id="overlay-progression" style="display:none; position:absolute; top:0; left:0; width:240px; height:320px; background:rgba(0,0,0,0.88); z-index:200; flex-direction:column;">
+    <div style="height:32px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 10px; font-size:12px; font-weight:bold; color:var(--text); flex-shrink:0;">Progress to&#x2026;</div>
+    <div id="progression-content" style="flex:1; overflow-y:auto;"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Cancel</span>
+      <span class="sk-csk">Select</span>
+      <span class="sk-rsk"></span>
+    </div>
+  </div>
+
+  <!-- ── Progression confirm overlay ─────────────────────────────────────── -->
+  <div id="overlay-prog-confirm" style="display:none; position:absolute; top:0; left:0; width:240px; height:320px; background:rgba(0,0,0,0.88); z-index:210; flex-direction:column; justify-content:center; align-items:center;">
+    <div id="prog-confirm-content" style="width:200px; background:var(--bg2); border:1px solid var(--border); border-radius:4px; padding:16px; text-align:center;">
+      <div id="prog-confirm-title" style="font-size:13px; font-weight:bold; color:var(--text); margin-bottom:8px;"></div>
+      <div id="prog-confirm-sub" style="font-size:11px; color:var(--text-muted); margin-bottom:16px;"></div>
+      <div style="display:flex; gap:8px; justify-content:center;">
+        <span id="prog-confirm-cancel" style="flex:1; padding:7px 0; text-align:center; border:1px solid var(--border); border-radius:3px; font-size:12px; color:var(--text-muted); cursor:pointer;">Cancel</span>
+        <span id="prog-confirm-ok" style="flex:1; padding:7px 0; text-align:center; background:var(--accent); border-radius:3px; font-size:12px; color:#fff; font-weight:bold; cursor:pointer;">Confirm</span>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Shortcut map overlay ─────────────────────────────────────────────── -->
   <div id="overlay-shortcuts" style="display:none; position:absolute; top:0; left:0; width:240px; height:320px; background:rgba(0,0,0,0.88); z-index:200; flex-direction:column;">
     <div style="height:32px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 10px; font-size:12px; font-weight:bold; color:var(--text); flex-shrink:0;">Keys</div>
@@ -272,6 +517,33 @@
       <span class="sk-lsk"></span>
       <span class="sk-csk">Close</span>
       <span class="sk-rsk"></span>
+    </div>
+  </div>
+
+  <!-- ── Receive passphrase overlay ───────────────────────────────────────── -->
+  <div id="overlay-receive-pp" style="display:none; position:absolute; top:0; left:0; width:240px; height:320px; background:rgba(0,0,0,0.92); z-index:210; flex-direction:column; justify-content:center; padding:24px 20px; box-sizing:border-box;">
+    <div style="font-size:13px; font-weight:bold; color:var(--accent); text-align:center; margin-bottom:6px;">Protected Link</div>
+    <div style="font-size:10px; color:var(--text-muted); text-align:center; margin-bottom:14px;">Enter the passphrase to open this record.</div>
+    <input id="receive-pp-input" type="password" autocomplete="off" autocorrect="off" spellcheck="false"
+      style="width:100%; background:var(--bg2); color:var(--text); border:1px solid var(--accent); padding:8px; font-size:14px; letter-spacing:2px; text-align:center; box-sizing:border-box;">
+    <div id="receive-pp-error" style="display:none; font-size:10px; color:var(--danger); text-align:center; margin-top:6px;"></div>
+    <div style="margin-top:12px; display:flex; gap:8px;">
+      <span id="rpp-cancel-btn" style="flex:1; padding:7px 0; text-align:center; font-size:11px; color:var(--text-muted); background:var(--bg2); border:1px solid var(--border); cursor:pointer;">Cancel</span>
+      <span id="rpp-open-btn"   style="flex:1; padding:7px 0; text-align:center; font-size:11px; color:var(--accent); background:rgba(74,158,255,0.1); border:1px solid var(--accent); cursor:pointer; font-weight:bold;">Open</span>
+    </div>
+  </div>
+
+  <!-- ── Receive Note overlay ─────────────────────────────────────────────── -->
+  <div id="overlay-receive-note" style="display:none; position:absolute; top:0; left:0; width:240px; height:320px; background:rgba(0,0,0,0.93); z-index:215; flex-direction:column; box-sizing:border-box;">
+    <div style="padding:12px 14px 8px; border-bottom:1px solid rgba(255,255,255,0.1);">
+      <div style="font-size:12px; font-weight:bold; color:var(--accent);">Received Note</div>
+      <div id="rn-meta" style="font-size:10px; color:var(--text-muted); margin-top:2px;"></div>
+    </div>
+    <div id="rn-body" style="flex:1; overflow-y:auto; padding:10px 14px; font-size:12px; color:var(--text); white-space:pre-wrap; word-break:break-word; line-height:1.5;"></div>
+    <div id="rn-record" style="display:none; padding:6px 14px; border-top:1px solid rgba(255,255,255,0.08); font-size:10px; color:var(--text-muted);"></div>
+    <div style="padding:8px 14px; border-top:1px solid rgba(255,255,255,0.1); display:flex; gap:8px;">
+      <span id="rn-dismiss-btn" style="flex:1; padding:7px 0; text-align:center; font-size:11px; color:var(--text-muted); background:var(--bg2); border:1px solid var(--border); cursor:pointer; border-radius:2px;">Dismiss</span>
+      <span id="rn-save-btn" style="flex:1; padding:7px 0; text-align:center; font-size:11px; color:var(--accent); background:rgba(74,158,255,0.1); border:1px solid var(--accent); cursor:pointer; font-weight:bold; border-radius:2px;">Save Note</span>
     </div>
   </div>
 
@@ -286,10 +558,24 @@
   </div>
 
   <!-- ── Scripts: lib → services → demo seed → screens → app ─────────────── -->
+  <script src="js/lib/CurrencyUtil.js"></script>
   <script src="js/lib/utils.js"></script>
+  <script src="js/lib/ui-phase.js"></script>
+  <script src="js/lib/sale-catalogue.js"></script>
+  <script src="js/lib/ui-fields.js"></script>
   <script src="js/lib/countries.js"></script>
   <script src="js/lib/fflate.js"></script>
+  <script src="js/lib/crypto.js"></script>
+  <script src="js/lib/security.js"></script>
   <script src="js/lib/codec.js"></script>
+  <script src="js/lib/anon.js"></script>
+  <script src="js/lib/trig.js"></script>
+  <script src="js/lib/ctrig.js"></script>
+  <script src="js/lib/markers.js"></script>
+  <script src="js/lib/agreements.js"></script>
+  <script src="js/lib/roles.js"></script>
+  <script src="js/lib/attachment-store.js"></script>
+  <script src="js/lib/script-loader.js"></script>
   <script src="js/TemplateRegistry.js"></script>
   <script src="js/NoteCodec.js"></script>
   <script src="js/StorageAdapter.js"></script>
@@ -299,21 +585,41 @@
   <script src="js/FinancialModel.js"></script>
   <script src="js/PersonalService.js"></script>
   <script src="js/BlockRegistry.js"></script>
-  <script src="js/lib/demo.js"></script>
+  <script src="js/RecordTemplateService.js"></script>
+  <script src="js/GlobalSynonymsService.js"></script>
+  <script src="js/lib/demo.js" data-dev-only="1"></script>
+  <script src="js/screens/help.js"></script>
+  <script src="js/screens/home.js"></script>
+  <script src="js/screens/user-switcher.js"></script>
+  <script src="js/screens/timeline.js"></script>
+  <script src="js/screens/tasks.js"></script>
+  <script src="js/screens/calendar-wp.js"></script>
+  <script src="js/screens/sale-tally.js"></script>
+  <script src="js/screens/io-create.js"></script>
   <script src="js/screens/list.js"></script>
   <script src="js/screens/wizard.js"></script>
   <script src="js/screens/view.js"></script>
   <script src="js/screens/share.js"></script>
   <script src="js/screens/note-share.js"></script>
+  <script src="js/screens/template-creator.js"></script>
   <script src="js/screens/management.js"></script>
   <script src="js/NewEntTemplate.js"></script>
   <script src="js/screens/newent-wizard.js"></script>
   <script src="js/screens/ledger.js"></script>
+  <script src="js/screens/liabilities.js"></script>
+  <script src="js/screens/financial.js"></script>
+  <script src="js/screens/finance-overview.js"></script>
   <script src="js/screens/country.js"></script>
   <script src="js/screens/archive.js"></script>
+  <script src="js/screens/chain.js"></script>
+  <script src="js/screens/dispute.js"></script>
+  <script src="js/panels/workpads-panel-shared.js"></script>
+  <script src="js/panels/workpads-panel-browse.js"></script>
+  <script src="js/panels/workpads-panel-contact.js"></script>
+  <script src="js/panels/workpads-panel-record.js"></script>
   <script src="js/panels/WorkpadsPanel.js"></script>
   <script src="js/panels/PersonalPanel.js"></script>
   <script src="js/app.js"></script>
-  <script src="js/lib/browser-dev.js"></script>
+  <script src="js/lib/browser-dev.js" data-dev-only="1"></script>
 </body>
 </html>

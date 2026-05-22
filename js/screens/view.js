@@ -14,29 +14,105 @@
   var optionsOpen     = false;
   var optionsItems    = [];
   var optionsIdx      = 0;
-  var collapseState   = 0;  // 0=full 1=field-labels 2=section-headers
+  var collapseState   = 0;  // 0=full 1=field-labels 2=section-headers 3=minimal (title only)
   var collapsedFocusIdx = 0;
+  var backFocused     = false;
+  var commitPickerOpen      = false;
+  var commitPickerIdx       = 0;
+  var progressionPickerOpen = false;
+  var progressionPickerIdx  = 0;
+  var progressionPickerItems = [];
+  var progConfirmOpen       = false;
+  var progConfirmTarget     = null; // { type, label } of chosen progression
 
-  var LABELS = {
-    job:            'Job',
-    customer:       'Customer',
-    date:           'Date',
-    location:       'Location',
-    customer_phone: 'Phone',
-    start_time:     'Start',
-    end_time:       'End',
-    meeting_time:   'Meeting',
-    worker:         'Worker',
-    details:        'Details',
-    story:          'Story',
+  // Which types can progress to what — Job and Quote are progressable
+  var PROGRESSION_MAP = {
+    '':       [{ type: 'quote',   label: '\u2192 Quote',   icon: 'Q' },
+               { type: 'invoice', label: '\u2192 Invoice',  icon: 'I' }],
+    'quote':  [{ type: 'invoice', label: '\u2192 Invoice',  icon: 'I' },
+               { type: 'receipt', label: '\u2192 Receipt',  icon: 'R' }],
+    'invoice':[{ type: 'receipt', label: '\u2192 Receipt',  icon: 'R' }],
   };
 
-  var TYPE_LABELS = { quote: 'Quote', invoice: 'Invoice', receipt: 'Receipt' };
+  // Commit type definitions for "Close / commit" picker
+  var COMMIT_TYPES = [
+    { val: 0, label: 'Mark complete',    icon: '\u2713' },
+    { val: 1, label: 'Confirm payment',  icon: '\u00a3' },
+    { val: 2, label: 'Accept terms',     icon: '\u270f' },
+    { val: 3, label: 'Flag dispute',     icon: '\u26a0' },
+  ];
 
-  var CLASS_LABELS = { pads: 'PADS', job: 'JOB' };
+  // Human-readable labels for each commitType value
+  var COMMIT_TYPE_LABELS = { 0: 'Job complete', 1: 'Payment confirmed', 2: 'Terms accepted', 3: 'Disputed' };
+
+  var LABELS = {
+    job:              'Job',
+    customer:         'Customer',
+    date:             'Date',
+    date_end:         'End date',
+    due_date:         'Due date',
+    ref_number:       'Ref',
+    location:         'Location',
+    customer_phone:   'Phone',
+    alt_phone:        'Alt phone',
+    start_time:       'Start',
+    end_time:         'End',
+    meeting_time:     'Meeting',
+    worker:           'Worker',
+    qty_unit:         'Unit',
+    qty:              'Qty',
+    rate:             'Rate',
+    tag:              'Tag',
+    context_label:    'Label',
+    url:              'URL',
+    uid:              'Link ID',
+    website:          'Website',
+    social_handle:    'Social',
+    business_hours:   'Hours',
+    meeting_location: 'Meet at',
+    details:          'Details',
+    story:            'Story',
+    attachment:       'Attachment',
+    service_ref:      'Service ref',
+    expiry_date:      'Expiry',
+    worker_amount:    'Internal cost',
+  };
+
+  var CATEGORY_LABELS = {
+    0: 'Customer',    1: 'Client',         2: 'Vendor',        3: 'Supplier',
+    4: 'Contractor',  5: 'Sub-contractor', 6: 'Partner',       7: 'Employee',
+    8: 'Agent',       9: 'Accountant',    10: 'Bank / Lender', 11: 'Insurer',
+   12: 'Landlord',   13: 'Government',   14: 'Utility',       15: 'Referral',
+   16: 'Prospect',   17: 'General',
+  };
+
+  function isContactType(rec) {
+    var t = String((rec && rec.record_type)  || '').toLowerCase();
+    var c = String((rec && rec.record_class) || '').toLowerCase();
+    return t === 'contact' || c === 'contact';
+  }
+
+  var TYPE_LABELS = {
+    '':          'Job',
+    'quote':     'Quote',
+    'invoice':   'Invoice',
+    'receipt':   'Receipt',
+    'collected': 'Collecting',
+    'paid':      'Paid in Full',
+  };
+
+  var ROLE_LABELS = { 0: 'Customer', 1: 'Worker', 2: 'Supplier', 3: 'Other' };
+  function roleLabel(p) {
+    var r = p.role;
+    if (r === 0 || r === 1 || r === 2) return ROLE_LABELS[r];
+    if (p.role_text) return p.role_text;
+    return 'Participant';
+  }
+
+  var CLASS_LABELS = { pads: 'PADS', job: 'Status', contact: 'CONTACT' };
   function recordDesignation(rec) {
     var cls = (rec.record_class || rec.recordClass || '').toLowerCase();
-    return CLASS_LABELS[cls] || 'JOB';
+    return CLASS_LABELS[cls] || 'Status';
   }
 
   function toNum(v) {
@@ -67,7 +143,7 @@
 
   function getCollapsedItems() {
     if (collapseState === 1) return el.content.querySelectorAll('.view-field');
-    if (collapseState === 2) return el.content.querySelectorAll('.view-section');
+    if (collapseState === 2 || collapseState === 3) return el.content.querySelectorAll('.view-section');
     return [];
   }
 
@@ -89,7 +165,7 @@
 
   function updateViewCsk() {
     var csk = document.getElementById('view-csk');
-    if (csk) csk.textContent = collapseState > 0 ? 'Open' : 'Edit';
+    if (csk) csk.textContent = collapseState > 0 ? 'Open' : 'Options';
   }
 
   function flashField(field) {
@@ -149,8 +225,9 @@
 
     // ── Sections dropdown ──────────────────────────────────────────────────
     var sections = [{ id: '', label: 'Sections' }, { id: 'view-sec-top', label: 'Top' }];
-    if (rec.parentId)                                     sections.push({ id: 'view-parent-super', label: 'Parent' });
-    if (Array.isArray(rec.actions) && rec.actions.length) sections.push({ id: 'view-sec-actions',  label: 'Actions' });
+    if (rec.parentId)                                             sections.push({ id: 'view-parent-super',   label: 'Parent' });
+    if (Array.isArray(rec.actions)      && rec.actions.length)    sections.push({ id: 'view-sec-actions',    label: 'Actions' });
+    if (Array.isArray(rec.participants) && rec.participants.length) sections.push({ id: 'vsec-participants', label: 'Participants' });
     sections.push({ id: 'vsec-fin', label: 'Financials' });
 
     sel.innerHTML = sections.map(function(s) {
@@ -162,19 +239,20 @@
       this.value = '';
     };
 
-    // ── 3-state collapse toggle ────────────────────────────────────────────
+    // ── 4-state collapse toggle ────────────────────────────────────────────
     collapseState = 0;
     collapsedFocusIdx = 0;
-    el.content.classList.remove('view-collapsed', 'view-sec-collapsed');
+    el.content.classList.remove('view-collapsed', 'view-sec-collapsed', 'view-minimal');
     updateViewCsk();
     if (togBtn) {
       togBtn.className = 'view-tb-toggle';
       togBtn.onclick = function() {
-        collapseState = (collapseState + 1) % 3;
+        collapseState = (collapseState + 1) % 4;
         el.content.classList.toggle('view-collapsed',     collapseState === 1);
         el.content.classList.toggle('view-sec-collapsed', collapseState === 2);
+        el.content.classList.toggle('view-minimal',       collapseState === 3);
         togBtn.className = 'view-tb-toggle' +
-          (collapseState === 1 ? ' collapsed' : collapseState === 2 ? ' collapsed-2' : '');
+          (collapseState === 1 ? ' collapsed' : collapseState === 2 ? ' collapsed-2' : collapseState === 3 ? ' collapsed-3' : '');
         collapsedFocusIdx = 0;
         if (collapseState > 0) updateCollapsedFocus();
         else {
@@ -243,17 +321,33 @@
     el.title.textContent = rec.job || '(untitled)';
     updateViewCsk();
 
-    var typeLabel   = TYPE_LABELS[rec.record_type] || '';
+    var rt = rec.record_type || '';
+    var typeLabel = TYPE_LABELS.hasOwnProperty(rt) ? TYPE_LABELS[rt] : '';
     var designation = rec.parentId
-      ? ((rec.record_type || rec.recordType || 'entry').toUpperCase())
+      ? ((rt || rec.recordType || 'entry').toUpperCase())
       : recordDesignation(rec);
 
     var html = '<div class="view-paper" id="view-sec-top">';
 
+    var progressions = !rec.parentId ? (PROGRESSION_MAP[rt] || null) : null;
+    var progBadge = progressions
+      ? '<span class="view-prog-badge view-prog-pulse" id="view-prog-badge">' + esc(designation) + ' \u203a</span>'
+      : '<span class="view-rec-class">' + esc(designation) + '</span>';
     html += '<div class="view-paper-header">' +
-      '<span class="view-rec-class">' + esc(designation) + '</span>' +
+      progBadge +
       (typeLabel ? '<span class="view-rec-type">' + esc(typeLabel) + '</span>' : '') +
       '</div>';
+
+    if (rec.trigDisplay) {
+      if (rec.trigDisplay.trig_violation) {
+        html += '<div class="view-trig-banner">Display rules invalid (TRIG length)</div>';
+      } else if (!rec.trigDisplay.show) {
+        html += '<div class="view-trig-banner">Hidden by display trigger</div>';
+      } else if (rec.displaySchema) {
+        var dsLbl = ['Standard', 'Billboard', 'Form', 'Form+QR'][rec.displaySchema.displayType || 0];
+        html += '<div class="view-trig-banner">Presentation: ' + esc(dsLbl) + '</div>';
+      }
+    }
 
     if (rec.parentId) {
       html += '<div id="view-parent-super"></div>';
@@ -267,8 +361,24 @@
       var val = rec[id];
       if (val) processBody += viewRow(LABELS[id], esc(val));
     }
+    if (isContactType(rec)) {
+      var roleDisplay;
+      if (Array.isArray(rec.roles) && rec.roles.length) {
+        roleDisplay = rec.roles.map(function(rv) { return CATEGORY_LABELS[rv] || String(rv); }).join(', ');
+      } else if (rec.category != null) {
+        roleDisplay = CATEGORY_LABELS[rec.category] || String(rec.category);
+      }
+      if (roleDisplay) processBody += viewRow('Role', esc(roleDisplay));
+    }
     if (rec.receivedAt) {
       processBody += viewRow('Source', '<span style="color:var(--text-muted);">Received via link</span>');
+    }
+    // State commit — show status and chain completion details
+    if (rec.record_type === 'state_commit') {
+      var ctLabel = COMMIT_TYPE_LABELS[rec.commitType] || 'Committed';
+      processBody += viewRow('Status', esc(ctLabel), rec.disputeFlag ? 'color:var(--danger);' : 'color:var(--green);');
+      if (rec.chainComplete) processBody += viewRow('Chain', 'Complete \u2713', 'color:var(--green);');
+      if (rec.chainRef) processBody += viewRow('Chain ref', esc(rec.chainRef));
     }
     if (processBody) {
       html += viewSection('vsec-process', 'Process', processBody);
@@ -295,6 +405,35 @@
         '</div>';
     }
 
+    // Participants section
+    if (Array.isArray(rec.participants) && rec.participants.length) {
+      var partBody = '';
+      for (var pi = 0; pi < rec.participants.length; pi++) {
+        var p    = rec.participants[pi];
+        var rlbl = roleLabel(p);
+        var signals = [];
+        if (p.cert)  signals.push('CERT');
+        if (p.auth)  signals.push('AUTH');
+        if (p.lead)  signals.push('LEAD');
+        var badge = signals.length
+          ? ' <span class="part-signal">' + signals.join('\u00b7') + '</span>'
+          : '';
+        partBody +=
+          '<div class="view-field part-row">' +
+            '<div class="view-field-label">' + esc(rlbl) + badge + '</div>' +
+            '<div class="view-field-value part-name">' + esc(p.name || '\u2014') + (p.is_org || p.isOrg ? ' [org]' : '') + '</div>' +
+            (p.trading_name || p.tradingName ? '<div class="view-field-value part-phone">' + esc(p.trading_name || p.tradingName) + '</div>' : '') +
+            (p.email ? '<div class="view-field-value part-phone">' + esc(p.email) + '</div>' : '') +
+            (p.phone ? '<div class="view-field-value part-phone">' + esc(p.phone) + '</div>' : '') +
+            (p.note  ? '<div class="view-field-value part-note">'  + esc(p.note)  + '</div>' : '') +
+          '</div>';
+      }
+      html += '<div class="view-section" id="vsec-participants">' +
+        '<div class="view-sec-hdr">Participants (' + rec.participants.length + ')</div>' +
+        '<div class="view-sec-body">' + partBody + '</div>' +
+        '</div>';
+    }
+
     // Financials section (content injected async)
     html += '<div class="view-section" id="vsec-fin">' +
       '<div class="view-sec-hdr">Financials</div>' +
@@ -303,11 +442,66 @@
 
     html += '</div>';
     el.content.innerHTML = html;
+
+    // Wire progression badge (only present when progressions exist)
+    var progBadgeEl = document.getElementById('view-prog-badge');
+    if (progBadgeEl) {
+      progBadgeEl.onclick = function() { openProgressionPicker(); };
+    }
+
     WorkpadsPanel.setContext({ screen: 'view', record: rec });
 
     populateViewToolbar(rec);
     loadParentSuperLabel(rec);
     loadFinancialCard(rec);
+
+    // Chain state enrichment — runs for all records that have a chainRef
+    // Sets _chainHasDispute so openOptions() can adjust labels without a second async call
+    if (rec.chainRef) {
+      RecordService.listByChainRef(rec.chainRef).then(function(chainAll) {
+        if (currentRecord !== rec) return;
+        var chain = chainAll.filter(function(r) { return r.id !== rec.id; });
+        var chainRatified = chain.some(function(r) {
+          return (r.record_type || '').toLowerCase() === 'state_commit' && r.chainComplete;
+        });
+        currentRecord._chainRatified = chainRatified;
+        if (global.WPAgreements) {
+          var summaries = chainAll.map(function(r) {
+            return {
+              ack_request: !!(r.ackRequest),
+              chain: !!r.chainRef,
+              commit_type: r.sc_commit_type != null ? r.sc_commit_type : null,
+              sender_uid: r.sender_uid || r.worker || '',
+              threshold_n: r.threshold_n,
+            };
+          });
+          if (WPAgreements.isRatified(summaries)) currentRecord._chainRatified = true;
+        }
+        // Mark dispute presence on the live currentRecord object
+        currentRecord._chainHasDispute = chain.some(function(r) {
+          return r.record_type === 'dispute' || r.disputeFlag;
+        });
+
+        // ACK bar — only if this record requested acknowledgement
+        if (rec.ackRequest || (rec._meta && rec._meta.ackRequest)) {
+          var acked = chain.some(function(r) { return r.record_type === 'ack' || r.ackConfirmed; });
+          var ackEl = document.getElementById('view-ack-bar');
+          if (!ackEl) return;
+          if (acked) {
+            ackEl.style.display = 'flex';
+            ackEl.innerHTML = '<span style="color:var(--green);">\u2713 Acknowledged</span>';
+          } else {
+            ackEl.style.display = 'flex';
+            ackEl.innerHTML = '<span style="color:var(--accent);">ACK requested</span>' +
+              '<span class="view-ack-btn" id="view-ack-generate">Generate ACK \u203a</span>';
+            var btn = document.getElementById('view-ack-generate');
+            if (btn) {
+              btn.addEventListener('click', function() { doGenerateAck(rec); });
+            }
+          }
+        }
+      });
+    }
   }
 
   function loadParentSuperLabel(rec) {
@@ -354,6 +548,12 @@
 
       var html = '<div style="padding-top:4px;">';
 
+      // Qty × Rate
+      if (rec.qty && rec.rate) {
+        html += viewRow('Qty \u00d7 Rate',
+          esc(rec.qty) + ' \u00d7 ' + esc(rec.rate) + ' = ' + fmtMoney(toNum(rec.qty) * toNum(rec.rate), currency));
+      }
+
       if (summary.price) {
         html += viewRow('Amount', fmtMoney(summary.price, currency));
       }
@@ -362,6 +562,18 @@
       }
       if (summary.total) {
         html += viewRow('Total', fmtMoney(summary.total, currency), 'font-weight:bold;');
+      }
+
+      // Compound line items
+      if (Array.isArray(rec.compound_lines) && rec.compound_lines.length > 0) {
+        var linesSubtotal = 0;
+        for (var li = 0; li < rec.compound_lines.length; li++) {
+          var cln = rec.compound_lines[li];
+          var clnAmt = toNum(cln.amount);
+          linesSubtotal += clnAmt;
+          html += viewRow(esc(cln.name || 'Item ' + (li + 1)), fmtMoney(clnAmt, currency), 'font-size:11px;');
+        }
+        html += viewRow('Lines subtotal', fmtMoney(linesSubtotal, currency), 'font-weight:bold;');
       }
 
       for (var i = 0; i < summary.billedExp.length; i++) {
@@ -435,11 +647,34 @@
 
   function openOptions() {
     if (!currentRecord) return;
+    var rec           = currentRecord;
+    var isContact     = rec.record_class === 'contact';
+    var isStateCommit = rec.record_type  === 'state_commit';
+    var isDispute     = rec.record_type  === 'dispute';
+    var isAmendment   = rec.record_type  === 'amendment';
+    var isChild       = !!rec.parentId;
+    var isLocked      = isStateCommit || isDispute || isAmendment;
+
     optionsItems = [
-      { label: 'Share',          action: function() { App.showShare(currentRecord); } },
-      { label: 'Edit',           action: function() { App.showWizard(currentRecord); } },
-      { label: 'Archive record', action: doArchive },
+      { key: '1', label: 'Edit',             action: function() { App.showWizard(rec); } },
+      { key: '2', label: 'Share',            action: function() { App.showShare(rec); } },
+      { key: '3', label: 'Financials',       action: function() { App.showFinancial(rec); } },
+      { key: '4', label: 'View chain',       action: function() { App.showChain({ chainRef: rec.chainRef, sourceId: rec.id }); } },
+      { key: '5', label: 'Archive record',   action: doArchive },
+      { key: '6', label: 'Save as template', action: doSaveAsTemplate },
     ];
+
+    if (!isContact && !isLocked && !isChild) {
+      optionsItems.push({ key: '7', label: 'Close / commit \u2026', action: doOpenCommitPicker });
+
+      if (!rec._chainRatified) {
+        var amendLabel   = 'Amend record';
+        var disputeLabel = rec._chainHasDispute ? 'Dispute record \u26a0' : 'Dispute record';
+        optionsItems.push({ key: '8', label: amendLabel,   action: doAmend   });
+        optionsItems.push({ key: '9', label: disputeLabel, action: doDispute });
+      }
+    }
+
     optionsIdx = 0;
     optionsOpen = true;
     renderOptions();
@@ -453,16 +688,27 @@
 
   function renderOptions() {
     var listEl = document.getElementById('options-content');
+    if (!listEl) return;
     listEl.innerHTML = optionsItems.map(function(item, i) {
-      return '<div class="list-item' + (i === optionsIdx ? ' focused' : '') + '">' +
+      var hint = item.key ? '<span class="opt-key-hint">[' + esc(item.key) + ']</span>' : '';
+      return '<div class="list-item opt-menu-row' + (i === optionsIdx ? ' focused' : '') + '">' +
         '<div class="list-item-title">' + esc(item.label) + '</div>' +
+        hint +
         '</div>';
     }).join('');
+    listEl.scrollTop = 0;
+    var focused = listEl.children[optionsIdx];
+    if (focused) focused.scrollIntoView({ block: 'nearest' });
   }
 
   function selectOption() {
     var item = optionsItems[optionsIdx];
     if (item) { closeOptions(); item.action(); }
+  }
+
+  function applyBackFocus() {
+    var crumb = document.querySelector('#screen-view .screen-crumb');
+    if (crumb) crumb.classList.toggle('crumb-focused', backFocused);
   }
 
   function goBack() {
@@ -472,8 +718,13 @@
         else App.showList();
       });
     } else {
-      App.showList();
+      App.showList({ restoreNav: true });
     }
+  }
+
+  function doSaveAsTemplate() {
+    if (!currentRecord) return;
+    App.showTemplateCreator({ fromRecord: currentRecord, returnTo: 'management' });
   }
 
   function doArchive() {
@@ -482,15 +733,284 @@
     RecordService.archive(currentRecord.id).then(function() { goBack(); });
   }
 
+  // ── Commit picker (Close / commit overlay) ─────────────────────────────
+
+  function doOpenCommitPicker() {
+    commitPickerOpen = true;
+    commitPickerIdx  = 0;
+    renderCommitPicker();
+    document.getElementById('overlay-commit').style.display = 'flex';
+  }
+
+  function closeCommitPicker() {
+    commitPickerOpen = false;
+    document.getElementById('overlay-commit').style.display = 'none';
+  }
+
+  function renderCommitPicker() {
+    var el = document.getElementById('commit-content');
+    if (!el) return;
+    el.innerHTML = COMMIT_TYPES.map(function(t, i) {
+      return '<div class="list-item' + (i === commitPickerIdx ? ' focused' : '') + '" data-commit-val="' + t.val + '">' +
+        '<div class="list-item-title">' + esc(t.icon + ' ' + t.label) + '</div>' +
+        '</div>';
+    }).join('');
+    var rows = el.querySelectorAll('[data-commit-val]');
+    for (var i = 0; i < rows.length; i++) {
+      rows[i].addEventListener('click', (function(v) {
+        return function() { confirmCommit(parseInt(v, 10)); };
+      })(rows[i].getAttribute('data-commit-val')));
+    }
+  }
+
+  function confirmCommit(commitType) {
+    closeCommitPicker();
+    if (!currentRecord) return;
+    var COMMIT_LABELS = { 0: 'Job complete', 1: 'Payment confirmed', 2: 'Terms accepted', 3: 'Disputed' };
+    var today = new Date().toISOString().slice(0, 10);
+    var newRec = {
+      record_type:   'state_commit',
+      chainRef:      currentRecord.chainRef,
+      job:           COMMIT_LABELS[commitType] + ': ' + (currentRecord.job || ''),
+      customer:      currentRecord.customer || '',
+      currency:      currentRecord.currency || 'GBP',
+      date:          today,
+      commitType:    commitType,
+      chainComplete: commitType !== 3,
+      disputeFlag:   commitType === 3,
+      draft:         false,
+    };
+    // Stamp ratified frame bytes onto the record if markers + codec available
+    if (global.WPMarkers && global.WPCodec && global.WPCodec._buildFrame) {
+      try {
+        var frameBytes = global.WPMarkers.buildRatifiedFrame({
+          story:        COMMIT_LABELS[commitType],
+          job:          currentRecord.job || '',
+          date:         today,
+          refNumber:    currentRecord.ref_number || '',
+          contextLabel: currentRecord.chainRef   || '',
+          commitType:   commitType,
+        });
+        if (frameBytes && frameBytes.length) {
+          // Store as base64 string so it survives JSON serialisation
+          var b64 = '';
+          for (var i = 0; i < frameBytes.length; i++) {
+            b64 += String.fromCharCode(frameBytes[i]);
+          }
+          newRec._ratifiedFrame = btoa(b64);
+        }
+      } catch (_) { /* markers optional — don't block commit */ }
+    }
+    RecordService.create(newRec).then(function(commitRec) {
+      App.showView(commitRec);
+    });
+  }
+
+  // ── Progression picker ─────────────────────────────────────────────────
+
+  function openProgressionPicker() {
+    if (!currentRecord) return;
+    var items = PROGRESSION_MAP[currentRecord.record_type || ''];
+    if (!items || !items.length) return;
+    progressionPickerItems = items;
+    progressionPickerIdx   = 0;
+    progressionPickerOpen  = true;
+    renderProgressionPicker();
+    document.getElementById('overlay-progression').style.display = 'flex';
+  }
+
+  function closeProgressionPicker() {
+    progressionPickerOpen = false;
+    document.getElementById('overlay-progression').style.display = 'none';
+  }
+
+  function renderProgressionPicker() {
+    var el = document.getElementById('progression-content');
+    if (!el) return;
+    var html = '';
+    for (var i = 0; i < progressionPickerItems.length; i++) {
+      var item = progressionPickerItems[i];
+      html += '<div class="list-item' + (i === progressionPickerIdx ? ' focused' : '') +
+        '" data-prog-idx="' + i + '">' +
+        '<div class="list-item-title">' + esc(item.label) + '</div>' +
+        '</div>';
+    }
+    el.innerHTML = html;
+    var rows = el.querySelectorAll('[data-prog-idx]');
+    for (var r = 0; r < rows.length; r++) {
+      rows[r].onclick = (function(idx) {
+        return function() { selectProgression(idx); };
+      })(parseInt(rows[r].getAttribute('data-prog-idx'), 10));
+    }
+  }
+
+  function selectProgression(idx) {
+    if (idx === undefined) idx = progressionPickerIdx;
+    var item = progressionPickerItems[idx];
+    if (!item) return;
+    closeProgressionPicker();
+    openProgConfirm(item);
+  }
+
+  // ── Progression confirm overlay ─────────────────────────────────────────
+
+  function openProgConfirm(item) {
+    progConfirmTarget = item;
+    progConfirmOpen   = true;
+    var titleEl = document.getElementById('prog-confirm-title');
+    var subEl   = document.getElementById('prog-confirm-sub');
+    if (titleEl) titleEl.textContent = item.label;
+    if (subEl)   subEl.textContent   = 'A new ' + (item.type || '') + ' record will be created in this chain.';
+    var cancelBtn = document.getElementById('prog-confirm-cancel');
+    var okBtn     = document.getElementById('prog-confirm-ok');
+    if (cancelBtn) cancelBtn.onclick = function() { closeProgConfirm(); };
+    if (okBtn)     okBtn.onclick     = function() { doProgressTo(progConfirmTarget); };
+    document.getElementById('overlay-prog-confirm').style.display = 'flex';
+  }
+
+  function closeProgConfirm() {
+    progConfirmOpen   = false;
+    progConfirmTarget = null;
+    document.getElementById('overlay-prog-confirm').style.display = 'none';
+  }
+
+  function doProgressTo(item) {
+    closeProgConfirm();
+    if (!currentRecord || !item) return;
+    var src = currentRecord;
+    var clone = merge({}, src, {
+      record_type: item.type,
+      parentId:    src.id,
+      chainRef:    src.chainRef,
+      draft:       true,
+    });
+    // Must delete id so RecordService.create() generates a fresh one
+    delete clone.id;
+    delete clone._ratifiedFrame;
+    delete clone._isAmendment;
+    delete clone._amendedFromId;
+    delete clone._originalSnap;
+    delete clone.chainComplete;
+    delete clone.disputeFlag;
+    delete clone.ackRequest;
+    delete clone.ackConfirmed;
+    App.showWizard(clone);
+  }
+
+  // ── Amendment ──────────────────────────────────────────────────────────
+
+  function doAmend() {
+    if (!currentRecord) return;
+    var src = currentRecord;
+    // Clone the record, stripping id so it creates a new one
+    // _amendedFromId links back to the original; changedMask starts empty
+    // wizard will set _isAmendment so share codec uses BASE_TEMPLATE=6
+    var clone = merge({}, src, {
+      chainRef:       src.chainRef,
+      record_type:    'amendment',
+      _isAmendment:   true,
+      _amendedFromId: src.id,
+      _originalSnap:  JSON.stringify(src),
+      draft:          true,
+    });
+    delete clone.id;
+    App.showWizard(clone);
+  }
+
+  // ── Dispute ────────────────────────────────────────────────────────────
+
+  function doDispute() {
+    if (!currentRecord) return;
+    var src = currentRecord;
+    var parentUid = null;
+    if (global.WPCrypto && global.WPCrypto.sha256) {
+      try {
+        var idBytes = [];
+        var idStr = src.id || '';
+        for (var ci = 0; ci < idStr.length; ci++) { idBytes.push(idStr.charCodeAt(ci) & 0xFF); }
+        parentUid = global.WPCrypto.sha256(new Uint8Array(idBytes)).subarray(0, 8);
+      } catch (_) { parentUid = null; }
+    }
+    App.showDispute({ record: src, parentUid: parentUid });
+  }
+
+  // ── ACK generation ─────────────────────────────────────────────────────
+
+  function doGenerateAck(rec) {
+    // Create a minimal ACK record in the same chain, then share it
+    RecordService.create({
+      record_type:  'ack',
+      chainRef:     rec.chainRef,
+      job:          'ACK: ' + (rec.job || ''),
+      customer:     rec.customer || '',
+      currency:     rec.currency || 'GBP',
+      date:         new Date().toISOString().slice(0, 10),
+      ackConfirmed: true,
+      ackForId:     rec.id,
+      draft:        false,
+    }).then(function(ackRec) {
+      App.showShare(ackRec);
+    });
+  }
+
   // ── Public API ────────────────────────────────────────────────────────────
 
   function onShow(rec) {
     closeOptions();
+    closeCommitPicker();
+    closeProgressionPicker();
+    closeProgConfirm();
+    backFocused = false;
+    var ackBar = document.getElementById('view-ack-bar');
+    if (ackBar) ackBar.style.display = 'none';
     render(rec);
   }
 
   function onKey(key) {
+    // Progression confirm overlay (highest priority)
+    if (progConfirmOpen) {
+      if (key === 'Backspace') { closeProgConfirm(); }
+      if (key === 'Enter')     { doProgressTo(progConfirmTarget); }
+      return;
+    }
+
+    // Progression picker
+    if (progressionPickerOpen) {
+      switch (key) {
+        case 'ArrowUp':
+          if (progressionPickerIdx > 0) { progressionPickerIdx--; renderProgressionPicker(); }
+          break;
+        case 'ArrowDown':
+          if (progressionPickerIdx < progressionPickerItems.length - 1) { progressionPickerIdx++; renderProgressionPicker(); }
+          break;
+        case 'Enter':     selectProgression(progressionPickerIdx); break;
+        case 'Backspace': closeProgressionPicker(); break;
+      }
+      return;
+    }
+
+    // Commit picker has highest priority after options overlay
+    if (commitPickerOpen) {
+      switch (key) {
+        case 'ArrowUp':
+          if (commitPickerIdx > 0) { commitPickerIdx--; renderCommitPicker(); }
+          break;
+        case 'ArrowDown':
+          if (commitPickerIdx < COMMIT_TYPES.length - 1) { commitPickerIdx++; renderCommitPicker(); }
+          break;
+        case 'Enter':     confirmCommit(COMMIT_TYPES[commitPickerIdx].val); break;
+        case 'Backspace': closeCommitPicker(); break;
+      }
+      return;
+    }
+
     if (optionsOpen) {
+      var numKey = parseInt(key, 10);
+      if (numKey >= 1 && numKey <= 9) {
+        var oi = numKey - 1;
+        if (oi < optionsItems.length) { optionsIdx = oi; selectOption(); }
+        return;
+      }
       switch (key) {
         case 'ArrowUp':
           if (optionsIdx > 0) { optionsIdx--; renderOptions(); }
@@ -504,10 +1024,20 @@
       return;
     }
 
+    // Back-button focus mode
+    if (backFocused) {
+      if (key === 'Enter' || key === 'Backspace') { backFocused = false; applyBackFocus(); goBack(); return; }
+      if (key === 'ArrowDown') { backFocused = false; applyBackFocus(); return; }
+      return;
+    }
+
     // Collapsed navigation mode
     if (collapseState > 0) {
       switch (key) {
-        case 'ArrowUp':   moveCollapsedFocus(-1); return;
+        case 'ArrowUp':
+          if (collapsedFocusIdx === 0) { backFocused = true; applyBackFocus(); }
+          else { moveCollapsedFocus(-1); }
+          return;
         case 'ArrowDown': moveCollapsedFocus(1);  return;
         case 'Enter': {
           var items = getCollapsedItems();
@@ -522,19 +1052,62 @@
     }
 
     switch (key) {
-      case 'Backspace': goBack();                              break;
-      case 'Enter':
-      case '1':         App.showWizard(currentRecord);        break;
-      case '2':         if (currentRecord) App.showShare(currentRecord); break;
-      case '3':         doArchive();                          break;
+      case 'ArrowUp':   backFocused = true; applyBackFocus();               break;
+      case 'Backspace': goBack();                                             break;
+      case 'Enter':     openOptions();                                        break;
+      case '1':         App.showWizard(currentRecord);                       break;
+      case '2':         if (currentRecord) App.showShare(currentRecord);     break;
+      case '3':         if (currentRecord) App.showFinancial(currentRecord); break;
+      case '4':         if (currentRecord) App.showChain({ chainRef: currentRecord.chainRef, sourceId: currentRecord.id }); break;
+      case '5':         doArchive();                                          break;
+      case '6':         doSaveAsTemplate();                                   break;
+      case '7':
+        if (currentRecord && currentRecord.record_class !== 'contact' &&
+            !currentRecord.parentId && currentRecord.record_type !== 'state_commit' &&
+            currentRecord.record_type !== 'dispute' && currentRecord.record_type !== 'amendment') {
+          doOpenCommitPicker();
+        }
+        break;
+      case '8':
+        if (currentRecord && !currentRecord._chainRatified &&
+            currentRecord.record_type !== 'state_commit' &&
+            currentRecord.record_type !== 'dispute' && currentRecord.record_type !== 'amendment' &&
+            !currentRecord.parentId) {
+          doAmend();
+        }
+        break;
+      case '9':
+        if (currentRecord && !currentRecord._chainRatified &&
+            currentRecord.record_type !== 'state_commit' &&
+            currentRecord.record_type !== 'dispute' && currentRecord.record_type !== 'amendment' &&
+            !currentRecord.parentId) {
+          doDispute();
+        }
+        break;
     }
+  }
+
+  function merge() {
+    var out = {};
+    for (var ai = 0; ai < arguments.length; ai++) {
+      var obj = arguments[ai];
+      if (!obj) continue;
+      for (var k in obj) {
+        if (obj.hasOwnProperty(k)) out[k] = obj[k];
+      }
+    }
+    return out;
   }
 
   global.ViewScreen = {
     onShow:        onShow,
     onKey:         onKey,
-    isOptionsOpen: function() { return optionsOpen; },
+    isOptionsOpen: function() { return optionsOpen || commitPickerOpen || progressionPickerOpen || progConfirmOpen; },
     getCurrentRecord: function() { return currentRecord; },
+    openCommitPickerFor: function(fields) {
+      // Called by App.prefillRecord — if a record is currently shown, open commit picker
+      if (currentRecord) { doOpenCommitPicker(); }
+    },
   };
 
 }(window));
