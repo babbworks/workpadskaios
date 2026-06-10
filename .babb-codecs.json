@@ -1,0 +1,12 @@
+{
+  "source_repo": "https://github.com/babbworks/babb-codecs",
+  "local_path": "../babb-codecs",
+  "codecs": {
+    "js/lib/codec.js":               { "babb_path": "workpads/kaios",     "version": "1.0" },
+    "js/lib/relational-codec.js":    { "babb_path": "workpads/relational","version": "0.4" },
+    "js/lib/native-groups-table.js": { "babb_path": "workpads/bitpad/src","version": "0.1.0" },
+    "js/lib/native-v1-split.js":     { "babb_path": "workpads/bitpad/src","version": "0.1.0" },
+    "js/lib/pathc-native.js":        { "babb_path": "workpads/bitpad/src","version": "0.1.0" },
+    "js/lib/pathc-v2.js":            { "babb_path": "workpads/bitpad/src","version": "0.1.0" }
+  }
+}
