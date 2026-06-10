@@ -13,6 +13,32 @@ Workpads mobile application for KaiOS 3.x devices. Creates, views, and shares po
 
 ---
 
+## What is it?
+
+Workpads KaiOS is a mobile application for KaiOS 3.x feature phones. It lets a field worker create structured job records, fill in process details step-by-step, and share each record as a compact URL readable by any Workpads client. Records use the PADS model (Process / Actions / Details / Story) and encode to under 300 characters via the pads-v1 binary codec. No touch screen required. No cloud dependency. Works on a $20 device.
+
+## The Problem
+
+Field service workers in low-connectivity environments — technicians, traders, contractors — need to create, carry, and share job records without depending on cloud apps, expensive hardware, or reliable internet. Existing solutions require smartphones, app stores, or server infrastructure. Most workers in emerging markets use KaiOS feature phones. There is no business record tool built for them.
+
+## How it Works
+
+The app runs entirely in a single HTML file with no build step. D-pad navigation guides the user through a PADS wizard. Records are stored in `localStorage`, encoded via pads-v1 (deflate + base64url), and shared as a short URL (`workpads.me/p#1pa/<payload>`). Any Workpads client decodes the URL and reconstructs the full record. No server involved in the share path.
+
+## Current Status
+
+v0.2.0 active development on `v0.1` branch. Core PADS wizard, record list, view, share, and management screens complete. pads-v1 codec fully implemented and cross-compatible with `workpads-cli`. Extended screens (chain, timeline, template creator, NFC handoff) in progress.
+
+## The Vision
+
+A business record system that works on the cheapest hardware on the planet — the $20 KaiOS phone carried by hundreds of millions in Africa, South Asia, and Latin America — with zero server dependency and sub-300-character share links that travel over SMS. Every field worker with a basic phone should be able to create, carry, and transmit a structured job record as easily as sending a text message.
+
+## Industry Context
+
+KaiOS runs on 200M+ active devices globally. No existing business productivity tool targets this platform. Workpads KaiOS fills a gap that neither enterprise mobile (Salesforce, SAP) nor consumer apps address: structured, offline-first, peer-to-peer job records for workers on feature phones in low-resource environments.
+
+---
+
 ## What It Does
 
 Workpads KaiOS lets a field worker — on a KaiOS feature phone with no touch screen — create a structured job record, fill in process details and actions step-by-step, and share the record as a compact URL. The URL can be opened on any device running a Workpads client (browser, CLI, or another phone).
