@@ -1066,6 +1066,28 @@ console.log('\nAmendment — disputeLink roundtrip');
   assert('Amendment disputeLink roundtrips', dec._amendment.disputeLink === true);
 })();
 
+console.log('\nShare — &r= ratified frame suffix roundtrip');
+(function() {
+  var ratified = codec._buildFrame({
+    story: 'Terms accepted',
+    job:   'Fence install',
+    date:  '2026-05-18',
+    tag:   'marker,ratified'
+  }, { baseTemplate: 5, commitType: 2, chainComplete: true });
+  var url = codec.encode({ job: 'Job complete: Fence install', date: '2026-05-18' }, {
+    baseTemplate: 5,
+    commitType: 0,
+    chainComplete: true,
+    disputeFlag: false,
+    ratifiedFrameBytes: ratified
+  });
+  assert('Ratified suffix: URL has &r=', url.indexOf('&r=') !== -1);
+  var dec = codec.decode(url);
+  assert('Ratified suffix: main job', dec.job.indexOf('Fence') !== -1);
+  assert('Ratified suffix: _ratifiedFrameRecord', !!dec._ratifiedFrameRecord);
+  assert('Ratified suffix: sealed story', dec._ratifiedFrameRecord.story === 'Terms accepted');
+})();
+
 // ── Chain URL suffix ───────────────────────────────────────────────────────────
 
 console.log('\nChain — CHAIN bit in meta1');
@@ -1540,11 +1562,9 @@ if (typeof localStorage === 'undefined') {
 }
 window.localStorage = global.localStorage;
 
-// ── load template-registry.js ─────────────────────────────────────────────────
+// ── load wp_template_* test shim (prod: TemplateRegistry.js) ─────────────────
 
-var trSrc = require('fs').readFileSync(__dirname + '/../js/lib/template-registry.js', 'utf8');
-(new Function('window', 'global', 'TextEncoder',
-  trSrc + '\n//# sourceURL=template-registry.js'))(window, window, window.TextEncoder);
+require('./lib/wp-template-registry-shim.js')(window);
 var registry = window.WPTemplateRegistry;
 
 // ── load formula.js ────────────────────────────────────────────────────────────

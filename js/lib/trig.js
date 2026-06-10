@@ -1,4 +1,6 @@
 // trig.js — TRIG display-trigger bytecode evaluator
+// In index.html (P4 TRIG receive/display) — see dev_daily/shrink/TRIG-RESHELL.md
+// Tests: codec-pads-v1.test.js via readFileSync.
 // Spec: OQ-32 in OPEN-QUESTIONS.md, TRIG-DESIGN.md
 // Evaluation is purely local (no network calls).
 // Exposes: global.WPTrig

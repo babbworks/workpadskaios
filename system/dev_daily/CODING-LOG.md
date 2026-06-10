@@ -12,6 +12,102 @@ Each session appends an entry below. Every entry records:
 
 Agents resuming work must read [`project-process.md`](../project-process.md) + [`DEVELOPMENT-PLAN.md`](DEVELOPMENT-PLAN.md) phase audit before touching any code.
 
+**App build phase (screens):** read [`APP-BUILD-PHASE.md`](APP-BUILD-PHASE.md) first — codec train closed; priority A1→A7, B1→B3.
+
+---
+
+## 2026-05-24 — App build phase opened (inventory doc)
+
+**Docs:** [`APP-BUILD-PHASE.md`](APP-BUILD-PHASE.md) — current vs planned screens, A1–B8 queue, build order, cross-refs. Codec closure: [`NATIVE-CODEC-ACTION-LOG.md`](NATIVE-CODEC-ACTION-LOG.md). workpadsdotme skipped.
+
+**Confirmed:** No new repo file in prior chat-only turn; this entry + `APP-BUILD-PHASE.md` are the durable record.
+
+**Next (app):** UI v2 P1 — `list_v2` + `UIV2Shell.lrow` per [`UI-V2-ROLLOUT-PLAN.md`](UI-V2-ROLLOUT-PLAN.md).
+
+## 2026-05-24 — UI v2 foundation (P0)
+
+**Theme:** `ui-theme.js` master switch (`legacy` | `v2`); `workpads-ui-v2.css` token bridge; `ui-v2-shell.js`; Manage → Theme row; `link-lab/ui-v2-mocks.html`; plan [`UI-V2-ROLLOUT-PLAN.md`](UI-V2-ROLLOUT-PLAN.md).
+
+## 2026-05-24 — A2 + CT-1–CT-3 Programmable receive + closing scaffolds
+
+**A2:** `programmable-receive.js` — analyze, list pills, view Fired/Waiting, `needsActionFromRules`; wired `list.js`, `view.js`; CSS; `PROGRAMMABLE-RECEIVE-LOCKED.md`.
+
+**Closing:** `binary-qr.js` (`WPQ1` + `#bq1/`), `written-code.js` (`@alias`), `print-record.js` + view Print summary; `app.js` resolve; link-lab `binary-qr.html`, `print-record.html`; `CLOSING-TASKS-LOCKED.md`.
+
+**Tests:** `programmable-receive`, `binary-qr`, `written-code`, `print-record`.
+
+## 2026-05-24 — B6 Presentation template library (Phase K)
+
+**Code:** `presentation-starters.js` (stall, farm, rocket, relay); `presentation-library.js`; Manage → **Notes** tab; boot `ensureBundled`; note-share list; `#t/` → Notes tab.
+
+**Docs/tests:** `PRESENTATION-LIBRARY-LOCKED.md`; `test/presentation-library.test.js`.
+
+## 2026-05-24 — B5 + B8 Template receive + daily hub
+
+**B5:** `template-receive.js` — `#rtpl/` + `#1dt/` save routing; Manage pending detail (import / edit / dismiss); flash on receive.
+
+**B8:** `daily-hub.js` — timeline entries (log/schedule/task/sale/work_record); tasks (due + actions); home badges; timeline/tasks scope UI.
+
+**Tests:** `template-receive.test.js`, `daily-hub.test.js`.
+
+## 2026-05-24 — B4 Activity taxonomy (C14)
+
+**Code:** `js/lib/activity-taxonomy.js` (`WPActivityTaxonomy`); `WorkActivityService` `setting` + `create` opts + `update`; Manage → Activities create UX; list activity picker pills; wizard activity labels.
+
+**Docs/tests:** `ACTIVITY-TAXONOMY-LOCKED.md`; `test/activity-taxonomy.test.js`.
+
+**Confirmed:** `npm test` green including activity-taxonomy.
+
+## 2026-05-24 — B2 Rel-volume + B3 Relations home
+
+**B2:** Decay + contact-id scoring, explain panel (Connections key 5), Manage presets/preview, list **Rhythm network** + **Net** badge. `REL-VOLUME-LOCKED.md`.
+
+**B3:** WP+ **Relations** lens when `relations_home` on — needs/offers/network shortcuts, top rhythm people. `RELATIONS-HOME-LOCKED.md`.
+
+## 2026-05-24 — B1 Social ledger (C9)
+
+**Code:** `social-ledger.js` events + query/render; View social trail; Connections badges + key 8 trail; logging on create/receive/confirm/gatekeeper.
+
+**Spec:** `SOCIAL-LEDGER-LOCKED.md`. C10 redirect still deferred.
+
+## 2026-05-24 — A7 NFC closing flows
+
+**Code:** `nfc-handoff.js` KaiOS `mozNfc` + Web NFC; `scenarioForRecord`; share scenarios; `app.js` `processIncomingHash` + NFC listen on home/list; manifest `nfc`/`nfc-share`; ack paths pass `nfcScenario: ack_return`.
+
+**Tests:** expanded `test/nfc-handoff.test.js`.
+
+## 2026-05-24 — A6 Display Phase 6
+
+**Code:** `glyph-registry.js` (v1 taxonomy glyphs + chain_mode); `glyph-card.js` four-zone `wp-card`; `css/workpads-ui.css` (KaiOS vars); `list.js` `_openObligation` enrichment; `chain.js` registry connectors; Management **Display** section + `UIPhase.enablePhase6()`. Flags default **off**.
+
+**Tests:** `test/glyph-registry.test.js` in `npm test`.
+
+## 2026-05-24 — A5 NOC gatekeeper (NOC-06)
+
+**Code:** `noc-gatekeeper.js`, `gatekeeper-receive.js`; IO connection policy picker; share Gatekeeper section; receive routing; view/connections hooks; sale_confirmed option.
+
+---
+
+## 2026-05-24 — A4 relational / symbol table UI
+
+**Code:** `symbols.js` screen; `symbol-table.js` CRUD; `relational-ui.js` share/view helpers; Management / Share / Connections / View wiring.
+
+---
+
+## 2026-05-24 — A3 template QR production UX
+
+**Code:** `js/lib/template-qr.js`; `share.js` Template QR section, boot `1dt` encode, presentation persist; `app.js` receive prompt + form wizard for `1dt/`; `view.js` banner; CSS; `test/template-qr.test.js`.
+
+---
+
+## 2026-05-24 — A1 programmable compose (wizard + share)
+
+**Code:** `js/lib/programmable-compose.js`; `wizard.js` Story obligations; `share.js` Obligations section + encode sync; `view.js` Edit obligations option; `index.html` script; `test/programmable-compose.test.js`.
+
+**Shipped:** Add/edit up to 8 rules (6 primitives); action bitmask checkboxes when actions exist; persists on save/share encode.
+
+---
+
 ---
 
 ## 2026-05-21 — UI roadmap + IO philosophy saved; phase flags scaffold

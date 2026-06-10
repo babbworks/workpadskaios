@@ -1,6 +1,6 @@
 # Workpads KaiOS — Development Plan
 _Living document. Updated as phases complete and decisions shift._
-_Last reviewed: 2026-05-15_
+_Last reviewed: 2026-05-21_
 
 ---
 
@@ -8,8 +8,41 @@ _Last reviewed: 2026-05-15_
 
 This is the cognitive anchor for ongoing development. It synthesises the system folder docs,
 external reliances (BASICS, workpads-standard, codec ecosystem), and the v0.2 roadmap into
-a single decision-making reference. Every planning session should start here, then go deeper
-into the specific doc flagged for the current phase.
+a single decision-making reference.
+
+**Every planning session:** start at [`project-process.md`](../project-process.md), then this file, then the phase-specific doc below.
+
+**App coding (2026-05-24+):** Native/v0.4 codec work closed in KaiOS. Screen and linked-functionality work is tracked in [`APP-BUILD-PHASE.md`](APP-BUILD-PHASE.md) (inventory + A1–B8 queue). UI checkboxes remain in [`UI-ROADMAP-STATUS.md`](UI-ROADMAP-STATUS.md).
+
+---
+
+## Phase audit summary (2026-05-21)
+
+Code audit against `app.js` `SCREENS` (22 screens), `package.json` v0.2.0, `npm test` (685 pass). Authoritative detail: [`FEATURES.md`](FEATURES.md) § KaiOS application.
+
+| Phase | Status | Evidence / gap |
+|-------|--------|----------------|
+| **A** Codec | **COMPLETE** | Encode `#1pa/` pads-v1; legacy decode; `npm test` green |
+| **B** Activity locale | **COMPLETE** | `ActivityService` presets; `CountryScreen`; `template_locale` in `encodeUrl` |
+| **C** Service layer | **COMPLETE** | `RecordService` CRUD, archive, receive children, VAT map |
+| **D** Navigation | **COMPLETE** | LSK/RSK panels, shortcuts, layered `app.js` keys |
+| **E** WorkpadsPanel | **COMPLETE** | Browse/record/wizard modes, COGS tiers |
+| **F** Archive | **COMPLETE** | `archive.js`, management route |
+| **G** Wizard financials | **COMPLETE** | Expense/COGS/payment sub-tabs |
+| **H** View financial card | **COMPLETE** | `view.js` + panel summaries |
+| **I** Financial screens | **COMPLETE** | `financial.js`, `finance-overview.js`, routed |
+| **J** List dashboard | **PARTIAL** | `list.js` summary bar (billed/outstanding); not full 14-window `wp_dash_window` spec |
+| **K** Templates | **PARTIAL** | `template-creator`, `TemplateRegistry`, NewEnt; bundled CSV library incomplete |
+| **L** Store packaging | **IN PROGRESS** | Manifest v0.2 SVG icons + clipboard; **PNG** store icons + device verify pending |
+| **M** Polish | **NOT STARTED** | Quota warning, backlog polish items |
+
+**v0.2 blockers for store:** Phase **L** (PNG icons, packaged zip verify). **J** full dashboard optional for v0.2.
+
+**Registered screens beyond original v0.1 plan (all wired):** `home`, `help`, `country`, `user-switcher`, `chain`, `dispute`, `ledger`, `liabilities`, `newent-wizard`, `template-creator`, `timeline`, `tasks`, `calendar-wp`, `note-share`.
+
+**js/ audit (2026-05-21):** 55 files under `js/`; **53** app scripts + `browser-dev.js` in `index.html`. `template-registry.js` deferred — T-INTEG on `TemplateRegistry.js`. Shrink waves: [`dev_refs/MINIMAL-CODE-AUDIT.md`](../dev_refs/MINIMAL-CODE-AUDIT.md).
+
+**Implementation gaps (not phases):** `changedMask` at share, `_ratifiedFrame` outbound emission, C-TRIG auto-schedule — see `IMPLEMENTATION.md`.
 
 ---
 
@@ -20,19 +53,20 @@ questions. When a decision touches a doc's domain, that doc is the authority.
 
 | Doc | Owns | Read when |
 |---|---|---|
-| `DEEPSCAN.md` | Current state of the app — what exists, what gaps | Starting any build session |
+| `project-process.md` | Cross-repo process, authority, State of Total Project | **Every session (first)** |
+| `FEATURES.md` | Feature register — what is shipped vs latent | Current app capability |
 | `ROADMAP.md` | Versioned feature list, phase names and contents | Sprint planning; phase sequencing |
-| `PRODUCTION-READINESS.md` *(root)* | File-level build tasks for v0.2, dotme reference map | Implementing a specific phase |
-| `PLATFORM.md` | ES5 rule, KaiOS constraints, nav model, storage limits | Any new screen, any nav change |
-| `CODEC-SYNC.md` | Sync protocol, checklist, three-repo obligation | Before/after any codec.js change |
-| `CODEC.md` *(this session)* | Wire format reference for kaios codec.js | Implementing financial encoding |
-| `DEVIATIONS.md` | Open bugs and standard divergences with status | Reviewing debt; planning fixes |
-| `ECOSYSTEM.md` | Cross-repo dependency map and maturity tiers | Cross-repo decisions; sync planning |
-| `VISION.md` | Product philosophy, global ambition, BASICS+SIMBA alignment | Orienting a session; resolving scope disputes |
+| `PRODUCTION-READINESS.md` *(root)* | Historical dotme gap analysis (partially stale) | Context only; prefer `FEATURES.md` |
+| `dev_refs/PLATFORM.md` | ES5 rule, KaiOS constraints, nav model, storage limits | Any new screen, any nav change |
+| `dev_refs/FRAME-SPEC.md` | pads-v1 wire format reference | Codec / share implementation |
+| `CODEC-SYNC.md` | KaiOS codec sync pointer + kaios-only paths | Before/after any codec.js change |
+| `DEVIATIONS.md` | Standard divergences with status | Reviewing debt; planning fixes |
+| `IMPLEMENTATION.md` *(root)* | Standard ↔ app implementation map | Spec compliance review |
 | `BACKLOG.md` | Unscheduled work with design intent recorded | Deciding what enters a phase |
-| `early-dev/dev-log.md` | Timestamped log of early-stage decisions | Session continuity; understanding why something was changed |
-| `early-dev/newent-development.md` | Full NewEnt feature vision — coaching, assumptions, Schema B/P | NewEnt development sessions |
-| `early-dev/dpad-nav.md` | D-pad extraction analysis, open questions | If revisiting dpad architecture |
+| `OPEN-QUESTIONS.md` | OQ registry | Resolving design questions |
+| `CODING-LOG.md` | Session code changelog | Continuity between coding sessions |
+| `APP-BUILD-PHASE.md` | App build phase — screens inventory + A1–B8 queue | **App coding sessions (2026-05-24+)** |
+| `dev_refs/archive/ECOSYSTEM.md` | Archived ecosystem notes | Historical only |
 
 ---
 
@@ -75,25 +109,30 @@ storage behaviour, or changes the URL schema must be reviewed against the BASICS
 The compatibility policy (`compatibility-policy.md`) is deferred to post-v0.1 — nothing
 blocks current development.
 
-### 3. Codec Ecosystem (Three-Repo Sync)
-**This is the highest-risk reliance.** There is no automated sync check. Silent divergence
-between the three codec copies has already happened (kaios vs dotme scheme tag mismatch).
+### 3. Codec Ecosystem (Four-Repo Sync)
+**This is the highest-risk reliance.** There is no automated sync check between kaios inline
+and the npm package.
 
 | Copy | Location | Role |
 |---|---|---|
 | **Normative spec** | `workpads-standard/codec.md` | Source of truth for wire format |
-| **KaiOS app** | `workpadskaios/js/lib/codec.js` | This repo |
-| **dotme web app** | `workpadsdotme/js/lib/codec.js` | Full reference implementation |
-| **dotme receiver** | `workpadsdotme/p/index.html` | Decode-only inline copy |
-| **npm package** | `workpads-codec/src/bitpad.js` | Tooling / test harness |
+| **npm package** | `workpads-codec/src/codec.js` | Canonical JS for CLI and `flow.test.js` |
+| **KaiOS app** | `workpadskaios/js/lib/codec.js` | Runtime UMD bundle (superset + legacy decode) |
+| **CLI** | `workpads-cli` via `@workpads/codec` | Integration harness |
 
-**Protocol:** See `CODEC-SYNC.md` for the 6-step sync checklist. Run it for any codec change.
-**Current known divergence:** DEV-WP-URL-001 (scheme tag: kaios still has legacy format in
-some paths). Tracked in `DEVIATIONS.md`.
+**Protocol:** `workpads-standard/codec-sync.md` + kaios `CODEC-SYNC.md` + `project-process.md` §8.  
+**Scheme tag (current):** `#1pa/` pads-v1. DEV-WP-URL-001 **fixed** (2026-05-17). Legacy decode retained.
 
 ---
 
 ## What Has Been Done (Since Last Baseline)
+
+*Session 2026-05-21 — hygiene + phase audit.*
+
+- Cross-repo process: `project-process.md`, agent entrypoints (`CLAUDE.md`, `AGENTS.md`), doc reconciliation for pads-v1
+- `npm test`: 685 pass (`flow.test.js` + `codec-pads-v1.test.js`)
+- Phase audit: A–I complete; J/K partial; L in progress (see table above)
+- `management.js` codec label: `pads-v1 (1pa/)` (confirmed)
 
 *Session 2026-05-15 — codebase cleanup and planning.*
 
@@ -113,22 +152,15 @@ some paths). Tracked in `DEVIATIONS.md`.
   `encodeUrl()` passes all financial fields, `decodeUrl()` + `normaliseDecoded()` strip underscore
   keys, `storeReceived()` persists inline sub-records as child `wp_record_` entries.
   `restoreRecord()`, `removeRecord()`, `getArchived()`, `listArchived()` all present.
-- **codec.js confirmed**: `encode()` already emits `1eg/` (codebook-c-kaios, template `0x02`,
-  24-bit flags). Financial block fully implemented. Legacy decode paths handle `1ag/`, `1bg/`,
-  `1cg/`, `1dg/`, `alg=bitpad-v1`. Kaios can decode dotme `1dg/` URLs; dotme cannot decode
-  kaios `1eg/` (intentional — extended flag space requires new decoder).
-- **DEVIATIONS.md updated**: DEV-WP-URL-001, DEV-WP-FIN-001, DEV-WP-VAT-001, DEV-WP-SUB-001
-  all marked fixed. DEV-WP-ARC-001 also closed the same session. Only DEV-WP-MFT-001 remains open.
+- **codec.js (2026-05-15 baseline):** pads-v1 migration in progress; **superseded 2026-05-17+** by `#1pa/` emit (see Phase A audit 2026-05-21).
 
 *Session continued 2026-05-15 — phases D–H audited, Phase F built.*
 
 - **Phases D/E/G/H confirmed complete** via code audit — all already implemented
 - **Phase F built**: `js/screens/archive.js` (restore/delete archived records), registered in
   `app.js`, routed from management Records tab. DEV-WP-ARC-001 closed.
-- **Stale codec label fixed** in management.js Records tab (now shows `1eg/ + fflate`)
 - **CountryScreen Settings** locale display added (Phase B task 4) — shows currency + tax rate
 - **Wizard SHORTCUT_MAP** corrected — removed non-existent 'F' key entry
-- Only open deviation: DEV-WP-MFT-001 (manifest icons + permissions — Phase L)
 
 ---
 
@@ -140,36 +172,25 @@ Phase letters match ROADMAP.md and PRODUCTION-READINESS.md for cross-reference.
 ---
 
 ### Phase A — Codec Alignment
-**Status: COMPLETE (2026-05-15)**
-**Governing docs:** `CODEC-SYNC.md`, `CODEC.md`, `workpads-standard/codec.md`
+**Status: COMPLETE (2026-05-21 audit)**
+**Governing docs:** `CODEC-SYNC.md`, `dev_refs/FRAME-SPEC.md`, `workpads-standard/codec.md`
 **Deviations closed:** DEV-WP-URL-001, DEV-WP-FIN-001
 
-Audit confirmed codec is already in the correct state:
-- `encode()` emits `1eg/` (template `0x02`, 24-bit flags, codebook-c-kaios)
-- Full financial block implemented in `padsEncodeKaios()` — matches dotme's `padsEncodeC()`
-  in structure (uint32 amounts, same fin_flags byte, expense/payment items)
-- Legacy decode paths cover all historic formats
-- Codec ecosystem note: kaios `1eg/` is a kaios-specific extension; dotme encodes to `1dg/`
-  and kaios can decode `1dg/` but dotme cannot decode `1eg/` — intentional by design
-
-Outstanding: `npm test` not yet run (no test harness in this repo). CODEC-SYNC.md 6-step
-checklist should be completed when a cross-device share test is performed manually.
+- `encode()` emits **pads-v1 `#1pa/`**; legacy schemes decode-only (`1eg/`, `1dg/`, `alg=bitpad-v1`, …)
+- Financial block, participants, domain IO, presentation/security tags in inline codec
+- **`npm test`:** 685 pass (2026-05-21)
+- Optional: manual kaios ↔ CLI share round-trip per `project-process.md` §8
 
 ---
 
-### Phase B — Activity Locale (can run parallel with A)
-**Entry criteria:** None
+### Phase B — Activity Locale
+**Status: COMPLETE (2026-05-21 audit)**
 **Governing docs:** `PLATFORM.md`, `workpads-standard/record-schema.md`
 
-ActivityService already has 10 locale presets. Phase B wires locale into the record creation
-flow and connects it to the codec's `template_locale` field (bit 17).
-
-Tasks:
-1. Confirm ActivityService.getLocale() returns full locale object (currency, tax_label, tax_rate)
-2. Ensure create() in RecordService passes locale to record object
-3. Wire `template_locale` into encodeUrl() opts (part of Phase A codec work)
-4. CountryScreen Settings tab: add locale display (currently placeholder "v0.3")
-   — bring forward the currency/tax display since locale is already in ActivityService
+- `ActivityService`: 10 locale presets; `getLocale()` drives currency/tax on create
+- `RecordService.create()` stamps currency from locale
+- `encodeUrl()` passes `templateLocale`
+- `CountryScreen` + management Settings show locale/currency/tax
 
 ---
 
@@ -255,10 +276,11 @@ Audit confirmed view.js `loadFinancialCard()` already renders:
 ---
 
 ### Phase I — Financial Screens
-**Entry criteria:** Phase H ✓**
-**Governing docs:** `ROADMAP.md §Phase I`, `workpadsdotme/js/screens/` (reference)
+**Status: COMPLETE (2026-05-21 audit)**
+**Entry criteria:** Phase H ✓
+**Governing docs:** `ROADMAP.md §Phase I`
 
-Two new screens:
+Implemented and routed (`view.js` option/shortcut `4`, `WorkpadsPanel`, `list.js`):
 
 **`js/screens/financial.js`** — per-record financial detail (standalone; deeper than view.js card):
 - Full COGS resolution breakdown: linked / action-allocated / unlinked lines
@@ -274,13 +296,18 @@ Two new screens:
 - Totals: revenue billed, COGS, payments received, outstanding
 - Gross margin %, net margin % across the set
 - Per-type breakdown (quote / invoice / expense / payment totals)
-- Route: from WorkpadsPanel financial button or list.js dashboard
+- Route: from WorkpadsPanel financial button or list.js dashboard link
 
 ---
 
 ### Phase J — List Dashboard
-**Entry criteria:** Phase H ✓**
+**Status: PARTIAL (2026-05-21 audit)**
+**Entry criteria:** Phase H ✓
 **Governing docs:** `ROADMAP.md §Phase J`
+
+**Done:** `list.js` `list-summary-bar` — billed + outstanding by currency; tap opens `finance-overview`.
+
+**Not done:** Full time-window matrix below (`wp_dash_window` persistence, 14 windows). `finance-overview.js` has **All / Month / Week** only.
 
 Add a revenue/received/margin summary block to the top of `list.js`.
 
@@ -313,29 +340,33 @@ Pull from `FinancialModel.summarize()` across filtered records.
 ---
 
 ### Phase K — Template System
-**Entry criteria:** Phase D (nav model stable), TemplateRegistry already implemented
-**Governing docs:** `ROADMAP.md §Phase K`, `early-dev/newent-development.md`
+**Status: PARTIAL (2026-05-21 audit)**
+**Entry criteria:** Phase D ✓
+**Governing docs:** `ROADMAP.md §Phase K`, `TEMPLATE-CREATOR-DESIGN.md`
 
-TemplateRegistry is already built (Schema A/B/P). Phase K adds the bundled template library
-and the CSV authoring path. Also: wire NewEnt to TemplateRegistry.render() (Schema B).
+**Done:** `TemplateRegistry`, `template-creator.js`, management Templates tab, `NewEntTemplate` + `newent-wizard.js`, list/management routes.
+
+**Not done:** Bundled ~20-type library ship set; primary on-device CSV paste authoring path per roadmap.
 
 ---
 
 ### Phase L — App Store Packaging
-**Entry criteria:** Phases A–J complete (all features shipped)
-**Governing docs:** `PLATFORM.md §Packaging`, `DEVIATIONS.md §DEV-WP-MFT-001`
-**Deviation fixed:** DEV-WP-MFT-001
+**Status: IN PROGRESS (2026-05-21 audit)**
+**Entry criteria:** Phases A–I complete; J/K partial acceptable for store candidate
+**Governing docs:** `PLATFORM.md`, `DEVIATIONS.md §DEV-WP-MFT-001`
 
-Tasks: icons (56/112/128px PNG), manifest update, version 0.2.0, package npm script.
+**Done:** `manifest.webmanifest` v0.2.0; SVG icons; clipboard permissions; `npm run pack` script exists.
+
+**Remaining:** PNG icons (56/112/128) if store requires; on-device share/clipboard verify; simulator/device smoke test.
 
 ---
 
 ### Phase M — Polish
+**Status: NOT STARTED**
 **Entry criteria:** Phase L
-**Governing docs:** `DEVIATIONS.md`, `BACKLOG.md`
+**Governing docs:** `BACKLOG.md` (QUOTA-001, DEMO-001)
 
-Final cleanup: stale codec labels (DEV-WP-URL-001 cosmetic), storage quota warning, formal
-close of all remaining DEV-WP-* deviations.
+Tasks: storage quota warning (~80% of 5MB), demo onboarding UX (DEMO-001), close remaining polish backlog.
 
 ---
 
@@ -345,7 +376,7 @@ When a decision in a session touches multiple repos or standards:
 
 1. **Standard first**: check `workpads-standard/` for the normative answer
 2. **Deviation or gap?**: log in `DEVIATIONS.md` if implementation can't match standard now
-3. **Codec change?**: run `CODEC-SYNC.md` checklist — all three copies, all five files
+3. **Codec change?**: `workpads-standard/codec-sync.md` + kaios `CODEC-SYNC.md` + `project-process.md` §8
 4. **BASICS impact?**: check `workpads-standard/basics-conformance.md` rules if adding external
    calls, changing storage behaviour, or changing the URL schema
 5. **Log the decision**: one entry in `early-dev/dev-log.md` with date + what changed + why
@@ -356,12 +387,12 @@ When a decision in a session touches multiple repos or standards:
 
 | ID | Description | Status |
 |---|---|---|
-| DEV-WP-URL-001 | Scheme tag mismatch — kaios legacy vs canonical 1eg/ | **fixed 2026-05-15** |
+| DEV-WP-URL-001 | Scheme tag — legacy vs pads-v1 `#1pa/` | **fixed 2026-05-17** |
 | DEV-WP-VAT-001 | VAT UI label not mapped to codec enum | **fixed 2026-05-15** |
 | DEV-WP-FIN-001 | Financial fields absent from wire format | **fixed 2026-05-15** |
 | DEV-WP-SUB-001 | Sub-record type field case mismatch | **fixed 2026-05-15** |
 | DEV-WP-ARC-001 | No archive screen UI | **fixed 2026-05-15** |
-| DEV-WP-MFT-001 | Manifest missing icons + clipboard permission | open — Phase L |
+| DEV-WP-MFT-001 | Store PNG icons (SVG + clipboard done) | **accepted** — PNG in Phase L |
 
 ---
 

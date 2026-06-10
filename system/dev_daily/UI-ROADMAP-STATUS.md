@@ -2,7 +2,7 @@
 
 **Purpose:** Single checklist so nothing from the 8-round plan, two UX fix batches, or IO/Sale philosophy is dropped.  
 **Plan:** [`UI-ROADMAP-IO-PHILOSOPHY.md`](UI-ROADMAP-IO-PHILOSOPHY.md) · **Integration:** [`UI-INTEGRATION-MAP.md`](../dev_refs/UI-INTEGRATION-MAP.md)  
-**Updated:** 2026-05-21
+**Updated:** 2026-05-22
 
 ### Legend
 
@@ -35,6 +35,8 @@
 | R2.1 | Panel browse ↔ list share one filter model | **Done** | `getListFilters` / `applyListFilters`; panel pulls list activities on open |
 | R2.2 | `work_surface` flag + `listFilters` object | **Done** | Full filter object (panel, type, sort, toggles) behind `work_surface` |
 | R2.3 | **FilterSheet** (sort + activity + type combined) | **Done** | `filter-sheet.js`; **Filters** btn + key `3`; default on |
+| R2.7 | **Slim list toolbar** (count · Sell · Filters/Tools · flag) | **Done** | Crowded sort/type/act/dens chips moved into Filters or **Tools** sheet |
+| R2.8 | **Sale rollup** — one row per sold item in period | **Done** | `sale-rollup.js`; inline count/qty/net; **+** / Enter quick re-sell; SoftRight / dbl-click last sale |
 | R2.4 | Sale **catalogue** (items you sell) | **Done** | `SaleCatalogue` + tally screen |
 | R2.5 | Panel **Sales** line → list filter | **Done** | `data-filter=sales` |
 | R2.6 | Panel **Quick sell** → tally | **Done** | `data-action=sell-tally` + Sell QC |
@@ -79,7 +81,7 @@
 | # | Deliverable | Status | Notes |
 |---|-------------|--------|-------|
 | R6.1 | **Foreground Sale** (home, list, panel) | **Done** | Sell btn, key `8`, home SC2, panel QC |
-| R6.2 | List density control | **Done** | Toolbar D / compact / minimal |
+| R6.2 | List density control | **Done** | Filters/Tools sheet **Density** (was toolbar D) |
 | R6.3 | Muted QC / softer panel backdrop | **Done** | Prior UX batch CSS |
 | R6.4 | View default collapse / 4th collapse | **Done** | Prior UX batch |
 | R6.5 | Quote progression pulse on view | **Done** | Prior UX batch |
@@ -138,6 +140,7 @@
 | Panel filter clears type filter | **Done** |
 | Activity on QC create buttons | **Done** |
 | Sales summary line + filter | **Done** (extended for `sale` type) |
+| Slim list toolbar + sale rollup rows | **Done** | `wp_sale_rollup` default on; toggle in Filters/Tools |
 | Bill of sale type | **Done** as **`sale`** + tally |
 | Deep invoice-child / liabilities in-form picker | **Deferred** → R3.7–R3.8 |
 
@@ -155,14 +158,14 @@
 | C6 | Soft balance hint (no hard block) | **Deferred** | Locked: defer — see `IO-DECISIONS-LOCKED.md` |
 | C7 | All inputs = **needs**; sourced/unsourced | **Done** | `io-record.js` need type + ledger `input_source` |
 | C8 | Needs / Offers / Connections as records | **Done** | Type picker + create/view screens |
-| C9 | **Social ledger** (equivalence, long timelines) | **Partial** | `social-ledger.js` scaffold; sale confirm hook |
+| C9 | **Social ledger** (equivalence, long timelines) | **Done** | Trail on view/connections; event log — equivalence deferred |
 | C10 | B→C obligation redirect / micro-target lines | **Deferred** | Phase 3+ |
-| C11 | **Rel-volume filter** (buy/sell frequency) | **Partial** | `rel-volume-settings.js` in Management; Connections + list **Net** btn |
+| C11 | **Rel-volume filter** (buy/sell frequency) | **Done** | Scoring + explain + presets; Connections; list **Net** |
 | C12 | **Progressive empty** create (indicator tree) | **Deferred** | Locked: end — wizard enough for now |
 | C13 | Action over information; people/entities prominence | **Done** | `connections.js` rhythm UI; panel opens it |
-| C14 | Minimal **Activity creation** step (not money/materials/social kinds) | **Not started** | TBD taxonomy |
-| C15 | Templates: rocket, farm, stall — via My Templates | **Partial** | Existing template system |
-| C16 | `relations_home` lens | **Not started** | Flag only |
+| C14 | Minimal **Activity creation** step (not money/materials/social kinds) | **Done** | `ACTIVITY-TAXONOMY-LOCKED.md` — own/other + field/base/remote |
+| C15 | Templates: rocket, farm, stall — presentation starters | **Done** | `PRESENTATION-LIBRARY-LOCKED.md` — Notes tab + note share |
+| C16 | `relations_home` lens | **Done** | `home.js` lens when flag on |
 
 ---
 

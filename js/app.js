@@ -16,6 +16,7 @@
     'io-create':       document.getElementById('screen-io-create'),
     'io-record':       document.getElementById('screen-io-record'),
     connections:       document.getElementById('screen-connections'),
+    symbols:           document.getElementById('screen-symbols'),
     list:              document.getElementById('screen-list'),
     wizard:            document.getElementById('screen-wizard'),
     view:              document.getElementById('screen-view'),
@@ -34,6 +35,8 @@
     'calendar-wp':    document.getElementById('screen-calendar-wp'),
     chain:            document.getElementById('screen-chain'),
     dispute:          document.getElementById('screen-dispute'),
+    'action-receive': document.getElementById('screen-action-receive'),
+    'gatekeeper-receive': document.getElementById('screen-gatekeeper-receive'),
   };
 
   var currentScreen = 'list';
@@ -108,11 +111,12 @@
       { key: '0', label: 'Quick note' },
     ],
     management: [
-      { key: '1', label: 'Records tab' },
-      { key: '2', label: 'Personal tab' },
-      { key: '3', label: 'Activities tab' },
-      { key: '4', label: 'My Templates' },
-      { key: '5', label: 'Settings tab' },
+      { key: '1', label: 'Settings tab (theme)' },
+      { key: '2', label: 'Records tab' },
+      { key: '3', label: 'Personal tab' },
+      { key: '4', label: 'Activities tab' },
+      { key: '5', label: 'My Templates' },
+      { key: '6', label: 'Notes tab' },
       { key: '0', label: 'Quick note' },
     ],
     ledger: [
@@ -180,6 +184,7 @@
       case 'io-create':         showIOCreate(opts); break;
       case 'io-record':         showIORecord(opts); break;
       case 'connections':       showConnections(opts); break;
+      case 'symbols':           showSymbols(opts); break;
       case 'share':             if (opts.recordId) {
         RecordService.get(opts.recordId).then(function(r) {
           if (r) { opts._navPop = true; showShare(r); } else showList(opts);
@@ -195,11 +200,26 @@
       case 'help':              showHelp(opts); break;
       case 'ledger':            showLedger(opts); break;
       case 'liabilities':       showLiabilities(opts); break;
+      case 'action-receive':    showActionReceive(opts); break;
+      case 'gatekeeper-receive': showGatekeeperReceive(opts); break;
       default:                  showList(opts); break;
     }
   }
 
   // ── Screen transitions ─────────────────────────────────────────────────────
+
+  var NFC_LISTEN_SCREENS = { home: true, list: true };
+
+  function syncNfcReceiveListener() {
+    if (!global.WPNfcHandoff || !WPNfcHandoff.isAvailable()) return;
+    if (NFC_LISTEN_SCREENS[currentScreen]) {
+      WPNfcHandoff.listenIncoming(function(url) {
+        processIncomingUrl(url);
+      }, function() { /* listen errors are non-fatal */ });
+    } else {
+      WPNfcHandoff.stopListening();
+    }
+  }
 
   function showScreen(name) {
     closeAllPanels();
@@ -211,6 +231,7 @@
     if (typeof NavStack !== 'undefined' && NavStack.syncScreenTitle) {
       NavStack.syncScreenTitle(name);
     }
+    syncNfcReceiveListener();
   }
 
   function showHelp(opts) {
@@ -268,6 +289,14 @@
     if (opts._navPop) delete opts._navPop;
     showScreen('connections');
     if (ConnectionsScreen && ConnectionsScreen.onShow) ConnectionsScreen.onShow(opts);
+  }
+
+  function showSymbols(opts) {
+    opts = opts || {};
+    if (!opts._navPop) navPush('symbols', opts);
+    if (opts._navPop) delete opts._navPop;
+    showScreen('symbols');
+    if (SymbolsScreen && SymbolsScreen.onShow) SymbolsScreen.onShow(opts);
   }
 
   function showTimeline() {
@@ -334,7 +363,7 @@
     meta = meta || {};
     if (!meta._navPop) navPush('share', { recordId: record && record.id, navLabel: 'Share' });
     showScreen('share');
-    ShareScreen.onShow(record);
+    ShareScreen.onShow(record, meta);
   }
 
   function showNoteShare(capture) {
@@ -396,6 +425,24 @@
     DisputeScreen.onShow(opts || {});
   }
 
+  function showActionReceive(opts) {
+    opts = opts || {};
+    if (!opts._navPop) navPush('action-receive', opts);
+    if (opts._navPop) delete opts._navPop;
+    showScreen('action-receive');
+    if (ActionReceiveScreen && ActionReceiveScreen.onShow) ActionReceiveScreen.onShow(opts);
+  }
+
+  function showGatekeeperReceive(opts) {
+    opts = opts || {};
+    if (!opts._navPop) navPush('gatekeeper-receive', opts);
+    if (opts._navPop) delete opts._navPop;
+    showScreen('gatekeeper-receive');
+    if (GatekeeperReceiveScreen && GatekeeperReceiveScreen.onShow) {
+      GatekeeperReceiveScreen.onShow(opts);
+    }
+  }
+
   // prefillRecord — used by ctrig.js obligation evaluator to route triggered forms
   // type: 'state_commit' | 'dispute' | 'amendment' | any wizard-openable type
   // fields: partial record object pre-populated for the wizard
@@ -426,11 +473,18 @@
   // ── Panel helpers ──────────────────────────────────────────────────────────
 
   function closeAllPanels() {
+    if (global.WP_DESKTOP_SITE && global.WPDesktop && global.WPDesktop.closeAllPanels) {
+      global.WPDesktop.closeAllPanels();
+      return;
+    }
     if (typeof WorkpadsPanel !== 'undefined' && WorkpadsPanel.close) WorkpadsPanel.close();
     if (typeof PersonalPanel !== 'undefined' && PersonalPanel.close) PersonalPanel.close();
   }
 
   function anyPanelOpen() {
+    if (global.WP_DESKTOP_SITE && global.WPDesktop && global.WPDesktop.panelNavActive) {
+      return global.WPDesktop.panelNavActive();
+    }
     return WorkpadsPanel.isOpen() || PersonalPanel.isOpen();
   }
 
@@ -541,28 +595,35 @@
     });
   }
 
-  // ── URL receive ────────────────────────────────────────────────────────────
+  // ── URL receive (hash, NFC tap, clipboard) ─────────────────────────────────
 
-  function checkIncomingUrl() {
-    var hash = window.location.hash.slice(1);
+  function resolveIncomingHash(hash) {
+    if (!hash) return hash;
+    if (global.WPBinaryQr && WPBinaryQr.isBq1Hash(hash)) {
+      var inner = WPBinaryQr.decodeBq1Hash(hash);
+      if (inner) hash = inner;
+    }
+    if (global.WPWrittenCode) {
+      var alias = WPWrittenCode.resolve(hash);
+      if (alias) hash = alias;
+    }
+    return hash;
+  }
+
+  function processIncomingHash(hash) {
     if (!hash) return;
+    hash = resolveIncomingHash(hash);
 
     // External My Template payload: #rtpl/<base64url JSON>
     if (hash.slice(0, 5) === 'rtpl/') {
-      try {
-        var rtplB64 = hash.slice(5).replace(/-/g, '+').replace(/_/g, '/');
-        while (rtplB64.length % 4) rtplB64 += '=';
-        var rtplFields = JSON.parse(atob(rtplB64));
-        if (typeof RecordTemplateService !== 'undefined' && RecordTemplateService.receiveExternal) {
-          RecordTemplateService.receiveExternal(rtplFields);
-          window.history.replaceState(null, '', window.location.pathname + window.location.search);
-          showManagement();
-          if (typeof ManagementScreen !== 'undefined' && ManagementScreen.showTab) {
-            ManagementScreen.showTab('templates');
-          }
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      if (global.WPTemplateReceive) {
+        var rtplResult = WPTemplateReceive.receiveFromHash(hash);
+        if (rtplResult.ok) {
+          WPTemplateReceive.routeAfterReceive(rtplResult, showManagement);
+        } else {
+          console.warn('[workpads] Record template receive failed:', rtplResult.error);
         }
-      } catch (rtplErr) {
-        console.warn('[workpads] Record template receive failed:', rtplErr.message);
       }
       return;
     }
@@ -573,10 +634,8 @@
         var tplResult = TemplateRegistry.installFromUrlHash(hash);
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
         if (tplResult.ok) {
-          showManagement();
-          if (typeof ManagementScreen !== 'undefined' && ManagementScreen.showTab) {
-            ManagementScreen.showTab('templates');
-          }
+          if (global.WPPresentationLibrary) WPPresentationLibrary.ensureBundled();
+          showManagement({ tab: 'present' });
           return;
         }
         if (tplResult.error === 'encrypted-template-deferred') {
@@ -611,10 +670,28 @@
 
     // Plain / presentation tags — decode directly
     try {
-      var isPresentation = (tag === '1pb/' || tag === '1pf/');
+      var isPresentation = (tag === '1pb/' || tag === '1pf/' || tag === '1dt/');
+      var isTemplateQrTag = (tag === '1dt/');
       var rec = RecordService.decodeUrl(hash);
       RecordService.storeReceived(rec).then(function(stored) {
+        return RecordService.list().then(function(all) {
+          return { stored: stored, all: all };
+        });
+      }).then(function(bundle) {
+        var stored = bundle.stored;
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        var isTemplateQr = isTemplateQrTag || !!stored._templateQr;
+
+        if (isTemplateQr && global.WPTemplateReceive) {
+          var saveTpl = confirm(
+            'Template QR received.\n\nSave as My Template (review in Manage \u2192 Templates before import)?'
+          );
+          if (saveTpl) {
+            WPTemplateReceive.routeAfterReceive(WPTemplateReceive.receiveFromRecord(stored), showManagement);
+            return;
+          }
+        }
+
         if (isPresentation && stored.trigDisplay && stored.trigDisplay.mode === 2 &&
             stored.formSchema && global.WPTrig) {
           App.showWizard(merge({
@@ -627,6 +704,23 @@
           }, stored));
           return;
         }
+        if ((stored.record_type || '') === 'connection' && global.SocialLedger) {
+          SocialLedger.logEvent('relay_received', {
+            connectionId: stored.id,
+            contactId: stored.linkedContactId || null,
+            ackRequired: !!stored.informational_ack,
+            ackType: stored.gatekeeper_type || 'light_ack',
+            note: stored.relay_note || '',
+          });
+        }
+        if (global.WPNocGatekeeper && WPNocGatekeeper.needsGatekeeperReceive(stored, bundle.all)) {
+          showGatekeeperReceive({ parentRecord: stored });
+          return;
+        }
+        if (global.WPChainExecution && WPChainExecution.needsActionReceive(stored, bundle.all)) {
+          showActionReceive({ parentRecord: stored });
+          return;
+        }
         showView(stored);
       }).catch(function(err) {
         console.warn('[workpads] Store received failed:', err && err.message ? err.message : err);
@@ -634,6 +728,22 @@
     } catch (e) {
       console.warn('[workpads] URL decode failed:', e.message);
     }
+  }
+
+  function processIncomingUrl(url) {
+    if (!url) return;
+    var hash = global.WPNfcHandoff && WPNfcHandoff.hashFromIncoming
+      ? WPNfcHandoff.hashFromIncoming(url)
+      : '';
+    if (!hash && url.indexOf('#') >= 0) hash = url.split('#').slice(1).join('#');
+    if (!hash) return;
+    processIncomingHash(hash);
+  }
+
+  function checkIncomingUrl() {
+    var hash = window.location.hash.slice(1);
+    if (!hash) return;
+    processIncomingHash(hash);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -647,9 +757,9 @@
   // PRIORITY CHAIN (highest first):
   //   1. handleOverlayKeys   — traps everything while quick-note or shortcut
   //                            overlay is open
-  //   2. handleSoftkeyPanels — LSK/RSK always toggle panels except onboarding
-  //   3. handlePanelNav      — all Up/Down/Left/Right/Enter while panel open
-  //   4. handleViewOptions   — delegated to ViewScreen when options open
+  //   2. handleViewOptions   — ViewScreen options/commit/progression overlays
+  //   3. handleSoftkeyPanels — LSK/RSK toggle panels (not while view overlays open)
+  //   4. handlePanelNav      — all Up/Down/Left/Right/Enter while panel open
   //   5. handleGlobalKeys    — 0 (quick note), * (shortcut map), CSK hold-timer
   //   6. delegateToScreen    — current screen's onKey() handler
   //
@@ -727,6 +837,8 @@
     'calendar-wp':      CalendarWPScreen,
     chain:              ChainScreen,
     dispute:            DisputeScreen,
+    'action-receive':       ActionReceiveScreen,
+    'gatekeeper-receive':   GatekeeperReceiveScreen,
   };
 
   // ── Layer 1: Overlay key trap ─────────────────────────────────────────────
@@ -792,8 +904,16 @@
       receivePpEl.style.display = 'none';
       receivePpHash = '';
       RecordService.storeReceived(decoded).then(function(stored) {
+        return RecordService.list().then(function(all) {
+          return { stored: stored, all: all };
+        });
+      }).then(function(bundle) {
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
-        showView(stored);
+        if (global.WPChainExecution && WPChainExecution.needsActionReceive(bundle.stored, bundle.all)) {
+          showActionReceive({ parentRecord: bundle.stored });
+          return;
+        }
+        showView(bundle.stored);
       }).catch(function(err) {
         receivePpError.textContent = 'Could not store: ' + (err && err.message ? err.message : 'unknown');
         receivePpError.style.display = 'block';
@@ -878,6 +998,11 @@
       }
       return false;
     }
+    if (global.WP_DESKTOP_SITE && global.WPDesktop && global.WPDesktop.skipSoftkeyPanelToggle) {
+      if (key === 'SoftLeft')  { WorkpadsPanel.toggle(); e.preventDefault(); return true; }
+      if (key === 'SoftRight') { PersonalPanel.toggle(); e.preventDefault(); return true; }
+      return false;
+    }
     if (key === 'SoftLeft')  { WorkpadsPanel.toggle(); e.preventDefault(); return true; }
     if (key === 'SoftRight') { PersonalPanel.toggle(); e.preventDefault(); return true; }
     return false;
@@ -915,12 +1040,22 @@
       e.preventDefault();
 
     } else if (key === 'ArrowLeft') {
+      if (global.WP_DESKTOP_SITE && global.WPDesktop && global.WPDesktop.cycleFocus) {
+        global.WPDesktop.cycleFocus(-1);
+        e.preventDefault();
+        return;
+      }
       if (WorkpadsPanel.isOpen()) {
         if (!(WorkpadsPanel.cycleListTab && WorkpadsPanel.cycleListTab(-1))) closeAllPanels();
       } else { closeAllPanels(); }
       e.preventDefault();
 
     } else if (key === 'ArrowRight') {
+      if (global.WP_DESKTOP_SITE && global.WPDesktop && global.WPDesktop.cycleFocus) {
+        global.WPDesktop.cycleFocus(1);
+        e.preventDefault();
+        return;
+      }
       if (WorkpadsPanel.isOpen()) {
         if (!(WorkpadsPanel.cycleListTab && WorkpadsPanel.cycleListTab(1))) closeAllPanels();
       } else { closeAllPanels(); }
@@ -1037,9 +1172,9 @@
   document.addEventListener('keydown', function(e) {
     var key = e.key;
     if (handleOverlayKeys(key, e))  return;
+    if (handleViewOptions(key))     { e.preventDefault(); return; }
     if (handleSoftkeyPanels(key, e)) return;
     if (anyPanelOpen())             { handlePanelNav(key, e); return; }
-    if (handleViewOptions(key))     return;
     if (!isFocusInInput())          { if (handleGlobalKeys(key, e)) return; }
     delegateToScreen(key);
   });
@@ -1060,7 +1195,8 @@
   });
 
   // List screen click handler
-  document.getElementById('list-content').addEventListener('click', function(e) {
+  var listContentEl = document.getElementById('list-content');
+  if (listContentEl) listContentEl.addEventListener('click', function(e) {
     var item = e.target.closest ? e.target.closest('.list-item') : null;
     if (item) {
       if (item.getAttribute('data-new-rec') || item.classList.contains('list-new-rec')) return; // handled by list.js
@@ -1105,6 +1241,7 @@
     showIOCreate:      showIOCreate,
     showIORecord:      showIORecord,
     showConnections:   showConnections,
+    showSymbols:       showSymbols,
     showWizard:        showWizard,
     showView:          showView,
     showFinancial:     showFinancial,
@@ -1126,6 +1263,8 @@
     showCalendarWP:    showCalendarWP,
     showChain:         showChain,
     showDispute:       showDispute,
+    showActionReceive: showActionReceive,
+    showGatekeeperReceive: showGatekeeperReceive,
     prefillRecord:     prefillRecord,
     launchCamera:      launchCamera,
     getHomeMode:       getHomeMode,
@@ -1139,8 +1278,10 @@
     goBack:            goBack,
   };
 
+  if (global.UITheme && global.UITheme.onBoot) global.UITheme.onBoot();
   if (global.UIPhase && global.UIPhase.onBoot) global.UIPhase.onBoot();
   if (typeof NavStack !== 'undefined' && NavStack.initCrumbBar) NavStack.initCrumbBar();
+  if (global.WPPresentationLibrary) WPPresentationLibrary.ensureBundled();
 
   checkIncomingUrl();
 

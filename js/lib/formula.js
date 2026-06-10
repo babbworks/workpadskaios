@@ -1,4 +1,5 @@
 // formula.js — RPN bytecode formula evaluator
+// NOT in index.html (audit Wave 1). Tests: codec-pads-v1.test.js via readFileSync.
 // Opcodes: LOAD_FIELD(0x1), LOAD_CONST(0x2), ADD(0x3), SUB(0x4), MUL(0x5), DIV(0x6), END(0x7)
 // Exposes: global.WPFormula
 

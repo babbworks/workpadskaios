@@ -9,7 +9,6 @@
 //   Arrow keys  → native (same as device)
 //   Numpad 0-9  → '0'-'9' (explicit, works regardless of NumLock state)
 //   Numpad *    → '*'
-//   NumpadEnter → Enter
 
 (function() {
   'use strict';
@@ -24,6 +23,10 @@
     'Numpad4': '4', 'Numpad5': '5', 'Numpad6': '6', 'Numpad7': '7',
     'Numpad8': '8', 'Numpad9': '9', 'NumpadMultiply': '*',
   };
+
+  var sidebarEl = null;
+  var shortcutsListEl = null;
+  var screenLabelEl = null;
 
   function isInInput() {
     var el = document.activeElement;
@@ -42,7 +45,6 @@
   }
 
   document.addEventListener('keydown', function(e) {
-    // a / d → SoftLeft / SoftRight (outside inputs only)
     if (SOFTKEY_MAP[e.key] && !isInInput()) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -50,7 +52,6 @@
       return;
     }
 
-    // s → CSK Enter (outside inputs only)
     if (e.key === 's' && !isInInput()) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -58,7 +59,6 @@
       return;
     }
 
-    // Numpad digits and * — remap by code so NumLock state doesn't matter
     if (NUMPAD_CODE_MAP[e.code]) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -67,7 +67,6 @@
       return;
     }
 
-    // NumpadEnter → Enter
     if (e.code === 'NumpadEnter') {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -75,85 +74,144 @@
       return;
     }
 
-    // Update shortcut bar on any non-input key
     setTimeout(updateShortcutBar, 50);
-  }, true); // capture phase
-
-  // ── Softkey bar click bindings ───────────────────────────────────────────
-  // Skip softkeys inside .panel — panels install their own click handlers.
+  }, true);
 
   function bindSoftkeyClicks() {
     document.querySelectorAll('.sk-lsk').forEach(function(el) {
       if (el.closest('.panel')) return;
+      if (el.closest('#overlay-options, #overlay-commit, #overlay-progression')) return;
       el.style.cursor = 'pointer';
       el.addEventListener('click', function() { fire('SoftLeft'); });
     });
     document.querySelectorAll('.sk-rsk').forEach(function(el) {
       if (el.closest('.panel')) return;
+      if (el.closest('#overlay-options, #overlay-commit, #overlay-progression')) return;
       el.style.cursor = 'pointer';
       el.addEventListener('click', function() { fire('SoftRight'); });
     });
     document.querySelectorAll('.sk-csk').forEach(function(el) {
       if (el.closest('.panel')) return;
+      if (el.closest('#overlay-options, #overlay-commit, #overlay-progression')) return;
       el.style.cursor = 'pointer';
       el.addEventListener('click', function() { fireCSK(); });
     });
+    /* Overlay softkeys sit above the active screen — bind once per overlay bar */
+    ['overlay-options', 'overlay-commit', 'overlay-progression'].forEach(function(id) {
+      var ov = document.getElementById(id);
+      if (!ov) return;
+      var lsk = ov.querySelector('.sk-lsk');
+      var csk = ov.querySelector('.sk-csk');
+      if (lsk) {
+        lsk.style.cursor = 'pointer';
+        lsk.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          fire('SoftLeft');
+        });
+      }
+      if (csk) {
+        csk.style.cursor = 'pointer';
+        csk.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          fireCSK();
+        });
+      }
+    });
   }
 
-  // ── Dev overlay ──────────────────────────────────────────────────────────
+  /** Wrap app DOM in #wp-device-shell; shortcuts live in #wp-dev-sidebar beside it. */
+  function ensureDevLayout() {
+    if (document.getElementById('wp-dev-host')) {
+      sidebarEl = document.getElementById('wp-dev-sidebar');
+      shortcutsListEl = document.getElementById('wp-dev-shortcuts');
+      screenLabelEl = document.getElementById('wp-dev-screen-label');
+      return;
+    }
 
-  var devBar  = null;
-  var shortBar = null;
+    document.documentElement.classList.add('wp-dev-layout');
 
-  function createDevOverlay() {
-    devBar = document.createElement('div');
-    devBar.id = 'dev-bar';
-    devBar.style.cssText = [
-      'position:fixed', 'bottom:40px', 'left:0', 'width:240px',
-      'background:rgba(0,0,0,0.75)', 'color:#4a9eff', 'font-size:9px',
-      'padding:2px 6px', 'z-index:999', 'pointer-events:none',
-      'font-family:monospace', 'line-height:1.5',
-    ].join(';');
-    devBar.textContent = 'DEV  a=LSK  s=CSK  d=RSK  Arrows=nav  Numpad=0-9/*';
-    document.body.appendChild(devBar);
+    var host = document.createElement('div');
+    host.id = 'wp-dev-host';
 
-    shortBar = document.createElement('div');
-    shortBar.id = 'dev-shortbar';
-    shortBar.style.cssText = [
-      'position:fixed', 'bottom:58px', 'left:0', 'width:240px',
-      'background:rgba(0,0,0,0.65)', 'color:#aaa', 'font-size:9px',
-      'padding:2px 6px', 'z-index:999', 'pointer-events:none',
-      'font-family:monospace', 'line-height:1.5',
-    ].join(';');
-    document.body.appendChild(shortBar);
+    var shell = document.createElement('div');
+    shell.id = 'wp-device-shell';
 
-    updateShortcutBar();
+    var body = document.body;
+    while (body.firstChild) {
+      shell.appendChild(body.firstChild);
+    }
+
+    sidebarEl = document.createElement('aside');
+    sidebarEl.id = 'wp-dev-sidebar';
+    sidebarEl.setAttribute('aria-label', 'Developer shortcuts');
+    sidebarEl.innerHTML =
+      '<h2>Browser dev</h2>' +
+      '<p class="wp-dev-keys">a = LSK &nbsp; s = CSK &nbsp; d = RSK<br>' +
+      'Arrows = nav &nbsp; Backspace = back<br>' +
+      'Numpad 0–9 and * = shortcuts</p>' +
+      '<h3 id="wp-dev-screen-label">Screen</h3>' +
+      '<ul id="wp-dev-shortcuts"></ul>' +
+      '<h3>Theme</h3>' +
+      '<p style="font-size:10px;color:#888;margin:0 0 6px;">Manage → Settings tab → Theme (master). Or:</p>' +
+      '<p class="wp-dev-keys" style="margin:0;">UITheme.set(\'v2\') / UITheme.set(\'legacy\')</p>';
+
+    shortcutsListEl = sidebarEl.querySelector('#wp-dev-shortcuts');
+    screenLabelEl = sidebarEl.querySelector('#wp-dev-screen-label');
+
+    body.appendChild(host);
+    host.appendChild(shell);
+    host.appendChild(sidebarEl);
+
+    var legacyBar = document.getElementById('dev-bar');
+    var legacyShort = document.getElementById('dev-shortbar');
+    if (legacyBar) legacyBar.remove();
+    if (legacyShort) legacyShort.remove();
   }
 
   function updateShortcutBar() {
-    if (!shortBar || typeof App === 'undefined') return;
-    var screen = App.getCurrentScreen ? App.getCurrentScreen() : '';
-    var maps   = App.SHORTCUT_MAPS || {};
+    if (!shortcutsListEl) return;
+    var screen = (typeof App !== 'undefined' && App.getCurrentScreen) ? App.getCurrentScreen() : '';
+    var maps   = (typeof App !== 'undefined' && App.SHORTCUT_MAPS) ? App.SHORTCUT_MAPS : {};
     var list   = maps[screen] || [];
+
+    if (screenLabelEl) {
+      screenLabelEl.textContent = screen ? 'Screen: ' + screen : 'Screen: (booting)';
+    }
+
     if (!list.length) {
-      shortBar.textContent = screen ? '[' + screen + '] *=keys' : '*=keys';
+      shortcutsListEl.innerHTML =
+        '<li><span class="wp-dev-k">*</span> shortcut map (this screen)</li>';
       return;
     }
-    var parts = list.map(function(s) { return s.key + '=' + s.label; });
-    shortBar.textContent = '[' + screen + '] ' + parts.join('  ');
+
+    shortcutsListEl.innerHTML = list.map(function(s) {
+      return '<li><span class="wp-dev-k">' + esc(s.key) + '</span> ' + esc(s.label) + '</li>';
+    }).join('');
   }
 
-  // ── Init ──────────────────────────────────────────────────────────────────
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /** Desktop shell (workpadskaios-desktop) loads the app in an iframe with ?embed=1 */
+  function isDesktopEmbed() {
+    return /(?:\?|&)embed=1(?:&|$)/.test(location.search);
+  }
+
+  function init() {
+    if (!isDesktopEmbed()) ensureDevLayout();
+    bindSoftkeyClicks();
+    updateShortcutBar();
+    setInterval(updateShortcutBar, 800);
+  }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-      bindSoftkeyClicks();
-      createDevOverlay();
-    });
+    document.addEventListener('DOMContentLoaded', init);
   } else {
-    bindSoftkeyClicks();
-    createDevOverlay();
+    init();
   }
 
-  console.log('[workpads dev] browser shim active — a=LSK, s=CSK, d=RSK, Numpad=0-9/*');
+  console.log(isDesktopEmbed()
+    ? '[workpads dev] embed mode — desktop shell owns sidebar'
+    : '[workpads dev] browser shim — shortcuts in #wp-dev-sidebar beside device');
 }());

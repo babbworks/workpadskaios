@@ -1,6 +1,8 @@
 # Workpads KaiOS — Production Readiness Brief
 _Generated 2026-05-11. Written to inform a Claude Code planning session._
 
+> **Status (2026-05-21):** This document is a **historical dotme gap analysis**. Many items below are now implemented in v0.2 (archive, financial screens, pads-v1 codec, manifest icons/permissions). For current capability use [`system/dev_daily/FEATURES.md`](system/dev_daily/FEATURES.md) and the State of Total Project snapshot in [`system/project-process.md`](system/project-process.md). Re-baseline this file when preparing store submission.
+
 ---
 
 ## Purpose

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workpads — obligations</title>
+  <link rel="stylesheet" href="css/link-lab.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="hdr">
+      <h1>Open obligations</h1>
+      <p>Multi-step: invoice fixture → add chain payments → obligation flag (CE-11).</p>
+    </header>
+    <p class="nav"><a href="index.html">Hub</a> · <a href="p/">Shell</a></p>
+
+    <ol class="lab-steps" id="steps">
+      <li class="active">1. Decode invoice</li>
+      <li>2. Chain: none</li>
+      <li>3. Chain: partial pay</li>
+      <li>4. Chain: paid in full</li>
+    </ol>
+
+    <div id="status"></div>
+    <div id="body"></div>
+  </div>
+
+  <script src="../js/lib/fflate.js"></script>
+  <script src="../js/lib/pathc-v2.js"></script>
+  <script src="../js/lib/codec.js"></script>
+  <script src="../js/lib/chain-execution.js"></script>
+  <script src="js/lab-common.js"></script>
+  <script src="js/obligations-page.js"></script>
+</body>
+</html>

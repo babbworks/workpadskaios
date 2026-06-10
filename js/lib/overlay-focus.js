@@ -38,6 +38,7 @@
       case 'Enter':
         onSelect(state.idx);
         return true;
+      case 'SoftLeft':
       case 'Backspace':
         if (onClose) onClose();
         return true;
@@ -59,6 +60,7 @@
       case 'Enter':
         onSelect(state.idx);
         return true;
+      case 'SoftLeft':
       case 'Backspace':
         if (onClose) onClose();
         return true;

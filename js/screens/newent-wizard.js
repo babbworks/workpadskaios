@@ -484,6 +484,10 @@
     renderCurrentScreen();
   }
 
+  if (el.csk) {
+    el.csk.addEventListener('click', function() { goNext(); });
+  }
+
   global.NewEntWizardScreen = {
     onShow: onShow,
     onKey:  onKey,

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workpads — round-trip</title>
+  <link rel="stylesheet" href="css/link-lab.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="hdr">
+      <h1>Round-trip</h1>
+      <p>Paste fragment → decode → re-encode (same tag) → decode → field diff.</p>
+    </header>
+    <p class="nav"><a href="index.html">Hub</a> · <a href="p/">Shell</a> · <a href="template.html">Template</a></p>
+
+    <div class="card">
+      <h2>Input</h2>
+      <label for="paste">URL or fragment</label>
+      <input type="text" id="paste" placeholder="#1pv/… or #1pa/…">
+      <label for="re-tag" style="margin-top:10px">Re-encode tag (auto-detected if blank)</label>
+      <select id="re-tag" style="width:100%;padding:10px;border:2px solid #1a1a1a;font-size:0.85rem">
+        <option value="">Auto</option>
+        <option value="1pv">1pv</option>
+        <option value="1pa">1pa</option>
+        <option value="1pb">1pb</option>
+        <option value="1dt">1dt</option>
+      </select>
+      <div class="btn-row">
+        <button type="button" class="primary" id="btn-run">Run round-trip</button>
+      </div>
+    </div>
+
+    <div id="status"></div>
+    <div id="body"></div>
+  </div>
+
+  <script src="../js/lib/fflate.js"></script>
+  <script src="../js/lib/domain-profile.js"></script>
+  <script src="../js/lib/symbol-table.js"></script>
+  <script src="../js/lib/pathc-v2.js"></script>
+  <script src="../js/lib/codec.js"></script>
+  <script src="js/lab-common.js"></script>
+  <script src="js/round-trip.js"></script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workpads — encode test link</title>
+  <link rel="stylesheet" href="css/link-lab.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="hdr">
+      <h1>Encode test link</h1>
+      <p>Build a real fragment using WPCodec — open in shell to verify round-trip.</p>
+    </header>
+
+    <p class="nav"><a href="index.html">Hub</a> · <a href="p/">Shell</a></p>
+
+    <div class="card">
+      <h2>Record JSON</h2>
+      <textarea id="json"></textarea>
+      <label for="tag" style="margin-top:10px">Tag</label>
+      <select id="tag" style="width:100%;padding:10px;border:2px solid #1a1a1a;font-size:0.85rem">
+        <option value="1pa">1pa — plain</option>
+        <option value="1pb">1pb — public billboard</option>
+        <option value="1pv" selected>1pv — pads-v2 Path C</option>
+      </select>
+      <div id="v4-opts" style="margin-top:10px">
+        <label><input type="checkbox" id="relational"> v0.4 relational bridge ext</label>
+        <label for="profile" style="margin-top:6px;display:block">Profile</label>
+        <select id="profile" style="width:100%;padding:10px;border:2px solid #1a1a1a;font-size:0.85rem">
+          <option value="">generic</option>
+          <option value="service_work.v1">service_work.v1</option>
+        </select>
+      </div>
+      <label for="link-base" style="margin-top:10px">Local shell base</label>
+      <input type="text" id="link-base" value="http://localhost:8765/link-lab/p">
+      <div class="btn-row">
+        <button type="button" class="primary" id="btn-encode">Encode</button>
+      </div>
+    </div>
+
+    <div id="err"></div>
+    <div id="out"></div>
+  </div>
+
+  <script src="../js/lib/fflate.js"></script>
+  <script src="../js/lib/domain-profile.js"></script>
+  <script src="../js/lib/symbol-table.js"></script>
+  <script src="../js/lib/pathc-v2.js"></script>
+  <script src="../js/lib/compression-metrics.js"></script>
+  <script src="../js/lib/codec.js"></script>
+  <script src="js/encode-page.js"></script>
+</body>
+</html>

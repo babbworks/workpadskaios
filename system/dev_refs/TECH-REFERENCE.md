@@ -589,3 +589,15 @@ Abbreviated. Full detail in TAG-REFERENCE.md.
 | `#1pt/` | Template-keyed | AES-CTR; key = SHA-256 of template content | Conditional |
 | `#l/` | List share | None | Yes |
 | `#1eg/` | Legacy (decode only) | Legacy format; no new encoding | — |
+
+---
+
+## App layer — KaiOS naming (not wire-format)
+
+| Term in UI/docs | JS module | Role |
+|-----------------|-----------|------|
+| Record preset | `RecordTemplateService`, `template-creator.js` | Wizard field bundles (`wp_rtpl_*`) |
+| Presentation template | `TemplateRegistry.js`, `NoteCodec.js` | HTML/CSS packs (`wp_tpl_*`), `#t/` / `#te/` |
+| Codec BASE_TEMPLATE / `#1pt/` | `codec.js` | Wire-format or encryption — not either app store above |
+
+See [`JS-RUNTIME-MAP.md`](JS-RUNTIME-MAP.md) § Two template systems.

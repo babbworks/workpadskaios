@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workpads Link Lab</title>
+  <link rel="stylesheet" href="css/link-lab.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="hdr">
+      <h1>Workpads Link Lab</h1>
+      <p>Local testing board — paste links, round-trip, scenarios. <code>npm run link-lab</code></p>
+    </header>
+
+    <div class="card">
+      <h2>Paste link</h2>
+      <label for="paste">Full URL or fragment</label>
+      <input type="text" id="paste" placeholder="#1pv/… or #1pa/…">
+      <div class="btn-row">
+        <button type="button" class="primary" id="go">Open in shell</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Tools</h2>
+      <table class="field-grid">
+        <tbody>
+          <tr><th>Decode</th><td><a href="p/">Shell</a></td></tr>
+          <tr><th>Encode</th><td><a href="encode.html">encode.html</a></td></tr>
+          <tr><th>Round-trip</th><td><a href="round-trip.html">decode → re-encode → diff</a></td></tr>
+          <tr><th>Template QR</th><td><a href="template.html">1pb / 1dt / #t/</a></td></tr>
+          <tr><th>Obligations</th><td><a href="obligations.html">open leg (multi-step)</a></td></tr>
+          <tr><th>Ack masks</th><td><a href="ack-masks.html">16-bit masks</a></td></tr>
+          <tr><th>Relational size</th><td><a href="relational.html">1st vs 10th bytes</a></td></tr>
+          <tr><th>Written code</th><td><a href="written-code.html">short alias registry</a></td></tr>
+          <tr><th>Binary QR</th><td><a href="binary-qr.html">bq1/ packet (CT-1)</a></td></tr>
+          <tr><th>Print record</th><td><a href="print-record.html">human summary (CT-3)</a></td></tr>
+          <tr><th>UI v2 mocks</th><td><a href="ui-v2-mocks.html">gap mocks (RL / PL / MO / ED)</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    document.getElementById('go').addEventListener('click', function() {
+      var v = document.getElementById('paste').value.trim();
+      if (!v) { window.location.href = 'p/'; return; }
+      var hi = v.indexOf('#');
+      var frag = hi >= 0 ? v.slice(hi + 1).replace(/^#+/, '') : v.replace(/^#+/, '');
+      window.location.href = 'p/#' + frag;
+    });
+  </script>
+</body>
+</html>

@@ -13,6 +13,15 @@
   var sc1FocusIdx = 0;
   var sc2FocusIdx = 0;
 
+  var relPeopleIdx = 0;
+  var relFocusZone = 'actions';
+  var relPeople = [];
+  var hubCounts = { timelineToday: 0, tasksOpen: 0, tasksOverdue: 0 };
+
+  function relationsLensOn() {
+    return global.UIPhase && UIPhase.isOn('relations_home');
+  }
+
   // ── Data ───────────────────────────────────────────────────────────────────
 
   var WORK_SUBS = [
@@ -110,9 +119,187 @@
     return o;
   }
 
+  // ── Relations home lens (C16 / B3) ─────────────────────────────────────────
+
+  function renderRelationsLens() {
+    var el = document.getElementById('home-content');
+    if (!el) return;
+    RecordService.list().then(function(records) {
+      var sum = global.RelVolume ? RelVolume.networkSummary(records) : {
+        bands: {}, needs: 0, offers: 0, openConnections: 0, topRhythm: [],
+      };
+      relPeople = (sum.topRhythm || []).concat(
+        global.RelVolume ? RelVolume.scoreByContact(records).filter(function(s) {
+          return s.band === 'warm';
+        }).slice(0, 3) : []
+      );
+
+      var html =
+        '<div class="rel-home-hero">' +
+          '<div class="rel-home-title">Relations</div>' +
+          '<div class="rel-home-sub">Needs, offers, and people in rhythm</div>' +
+          '<div class="rel-home-stats">' +
+            esc(String(sum.needs || 0)) + ' needs \u00b7 ' +
+            esc(String(sum.offers || 0)) + ' offers \u00b7 ' +
+            esc(String(sum.bands.rhythm || 0)) + ' in rhythm' +
+            (sum.openConnections ? ' \u00b7 ' + sum.openConnections + ' relay' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="rel-home-actions">' +
+          '<div class="rel-home-btn' + (relFocusZone === 'actions' && relPeopleIdx === 0 ? ' focused' : '') + '" data-rel-act="needs">' +
+            '<span class="rel-home-btn-lbl">Needs</span><span class="rel-home-btn-key">1</span></div>' +
+          '<div class="rel-home-btn' + (relFocusZone === 'actions' && relPeopleIdx === 1 ? ' focused' : '') + '" data-rel-act="offers">' +
+            '<span class="rel-home-btn-lbl">Offers</span><span class="rel-home-btn-key">2</span></div>' +
+          '<div class="rel-home-btn' + (relFocusZone === 'actions' && relPeopleIdx === 2 ? ' focused' : '') + '" data-rel-act="conn">' +
+            '<span class="rel-home-btn-lbl">Network</span><span class="rel-home-btn-key">3</span></div>' +
+        '</div>' +
+        '<div class="rel-home-sec-hdr">In rhythm</div>';
+
+      var pi;
+      for (pi = 0; pi < relPeople.length; pi++) {
+        var p = relPeople[pi];
+        var pf = relFocusZone === 'people' && relPeopleIdx === pi;
+        html += '<div class="rel-home-person' + (pf ? ' focused' : '') + '" data-rel-person="' + pi + '">' +
+          '<span class="rel-home-person-name">' + esc(p.label || p.key) + '</span>' +
+          '<span class="rel-home-person-score">' + (p.score ? p.score.toFixed(1) : '') + '</span>' +
+          '</div>';
+      }
+      if (!relPeople.length) {
+        html += '<div class="rel-home-empty">Log sales or jobs with customers to build rhythm.</div>';
+      }
+
+      html +=
+        '<div class="rel-home-footer">' +
+          '<div class="rel-home-link' + (relFocusZone === 'footer' && relPeopleIdx === 0 ? ' focused' : '') + '" data-rel-foot="new-need">+ Need (4)</div>' +
+          '<div class="rel-home-link' + (relFocusZone === 'footer' && relPeopleIdx === 1 ? ' focused' : '') + '" data-rel-foot="new-offer">+ Offer (5)</div>' +
+          '<div class="rel-home-link' + (relFocusZone === 'footer' && relPeopleIdx === 2 ? ' focused' : '') + '" data-rel-foot="classic">Classic WP+ home (0)</div>' +
+        '</div>' +
+        '<div class="rel-home-hint">Enable/disable lens in Manage \u2192 App \u2192 relations_home</div>';
+
+      el.innerHTML = html;
+
+      var acts = el.querySelectorAll('[data-rel-act]');
+      for (pi = 0; pi < acts.length; pi++) {
+        acts[pi].addEventListener('click', (function(id) {
+          return function() { activateRelationsAction(id); };
+        })(acts[pi].getAttribute('data-rel-act')));
+      }
+      var pers = el.querySelectorAll('[data-rel-person]');
+      for (pi = 0; pi < pers.length; pi++) {
+        pers[pi].addEventListener('click', (function(ix) {
+          return function() { openRelationsPerson(parseInt(ix, 10)); };
+        })(pers[pi].getAttribute('data-rel-person')));
+      }
+      var feet = el.querySelectorAll('[data-rel-foot]');
+      for (pi = 0; pi < feet.length; pi++) {
+        feet[pi].addEventListener('click', (function(id) {
+          return function() { activateRelationsFooter(id); };
+        })(feet[pi].getAttribute('data-rel-foot')));
+      }
+    });
+  }
+
+  function activateRelationsAction(id) {
+    if (id === 'needs') {
+      App.showList({ returnTo: 'home', typeFilter: 'need' });
+      return;
+    }
+    if (id === 'offers') {
+      App.showList({ returnTo: 'home', typeFilter: 'offer' });
+      return;
+    }
+    if (id === 'conn' && App.showConnections) App.showConnections();
+  }
+
+  function openRelationsPerson(idx) {
+    var p = relPeople[idx];
+    if (!p || !p.contactId) return;
+    RecordService.list().then(function(all) {
+      var i, r;
+      for (i = 0; i < all.length; i++) {
+        r = all[i];
+        if (r.id === p.contactId) {
+          App.showView(r);
+          return;
+        }
+      }
+    });
+  }
+
+  function activateRelationsFooter(id) {
+    if (id === 'new-need' && App.showIORecord) {
+      App.showIORecord({ recordType: 'need', returnTo: 'home' });
+      return;
+    }
+    if (id === 'new-offer' && App.showIORecord) {
+      App.showIORecord({ recordType: 'offer', returnTo: 'home' });
+      return;
+    }
+    if (id === 'classic' && global.UIPhase) {
+      UIPhase.disable('relations_home');
+      render();
+    }
+  }
+
+  function onKeyRelations(key) {
+    switch (key) {
+      case '1': activateRelationsAction('needs'); break;
+      case '2': activateRelationsAction('offers'); break;
+      case '3': activateRelationsAction('conn'); break;
+      case '4':
+        if (App.showIORecord) App.showIORecord({ recordType: 'need', returnTo: 'home' });
+        break;
+      case '5':
+        if (App.showIORecord) App.showIORecord({ recordType: 'offer', returnTo: 'home' });
+        break;
+      case '0':
+        if (global.UIPhase) { UIPhase.disable('relations_home'); render(); }
+        break;
+      case 'ArrowDown':
+        if (relFocusZone === 'actions') {
+          if (relPeopleIdx < 2) relPeopleIdx++;
+          else if (relPeople.length) { relFocusZone = 'people'; relPeopleIdx = 0; }
+          else { relFocusZone = 'footer'; relPeopleIdx = 0; }
+        } else if (relFocusZone === 'people') {
+          if (relPeopleIdx < relPeople.length - 1) relPeopleIdx++;
+          else { relFocusZone = 'footer'; relPeopleIdx = 0; }
+        } else if (relFocusZone === 'footer' && relPeopleIdx < 2) relPeopleIdx++;
+        renderRelationsLens();
+        break;
+      case 'ArrowUp':
+        if (relFocusZone === 'footer') {
+          if (relPeopleIdx > 0) relPeopleIdx--;
+          else if (relPeople.length) { relFocusZone = 'people'; relPeopleIdx = relPeople.length - 1; }
+          else { relFocusZone = 'actions'; relPeopleIdx = 2; }
+        } else if (relFocusZone === 'people') {
+          if (relPeopleIdx > 0) relPeopleIdx--;
+          else { relFocusZone = 'actions'; relPeopleIdx = 2; }
+        } else if (relFocusZone === 'actions' && relPeopleIdx > 0) relPeopleIdx--;
+        renderRelationsLens();
+        break;
+      case 'Enter':
+        if (relFocusZone === 'actions') {
+          activateRelationsAction(['needs', 'offers', 'conn'][relPeopleIdx]);
+        } else if (relFocusZone === 'people') {
+          openRelationsPerson(relPeopleIdx);
+        } else if (relFocusZone === 'footer') {
+          activateRelationsFooter(['new-need', 'new-offer', 'classic'][relPeopleIdx]);
+        }
+        break;
+      case 'SoftRight':
+        App.setHomeMode('list');
+        App.showList();
+        break;
+    }
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   function render() {
+    if (relationsLensOn()) {
+      renderRelationsLens();
+      return;
+    }
     var el = document.getElementById('home-content');
     if (!el) return;
     var html = '';
@@ -166,9 +353,17 @@
     html += '<div class="home-sc-row">';
     for (var s1i = 0; s1i < SC1.length; s1i++) {
       var s1a = focusZone === 'sc1' && sc1FocusIdx === s1i;
+      var badge = '';
+      if (s1i === 0 && hubCounts.timelineToday > 0) {
+        badge = '<span class="home-sc-badge">' + hubCounts.timelineToday + '</span>';
+      }
+      if (s1i === 1 && hubCounts.tasksOpen > 0) {
+        badge = '<span class="home-sc-badge' + (hubCounts.tasksOverdue ? ' home-sc-badge-warn' : '') + '">' +
+          hubCounts.tasksOpen + '</span>';
+      }
       html += '<div class="home-sc-btn' + (s1a ? ' focused' : '') + '" data-sc1="' + s1i + '">' +
         '<span class="home-sc-icon">' + icon(SC1_ICON[s1i]) + '</span>' +
-        '<span class="home-sc-label">' + SC1_LBL[s1i] + '</span>' +
+        '<span class="home-sc-label">' + SC1_LBL[s1i] + badge + '</span>' +
       '</div>';
     }
     html += '</div>';
@@ -290,6 +485,10 @@
   // ── D-pad ──────────────────────────────────────────────────────────────────
 
   function onKey(key) {
+    if (relationsLensOn()) {
+      onKeyRelations(key);
+      return;
+    }
     var order = zoneOrder();
     var idx   = order.indexOf(focusZone);
 
@@ -347,6 +546,17 @@
     }
   }
 
+  function refreshHubCounts(done) {
+    if (typeof RecordService === 'undefined' || !global.WPDailyHub) {
+      if (done) done();
+      return;
+    }
+    RecordService.list().then(function(all) {
+      hubCounts = WPDailyHub.homeBadges(all);
+      if (done) done();
+    });
+  }
+
   // ── onShow ─────────────────────────────────────────────────────────────────
 
   function onShow() {
@@ -363,7 +573,15 @@
       greetEl.textContent = firstName ? 'Hello, ' + firstName : 'Hello';
     }
 
-    render();
+    refreshHubCounts(function() {
+      if (relationsLensOn()) {
+        relFocusZone = 'actions';
+        relPeopleIdx = 0;
+        renderRelationsLens();
+      } else {
+        render();
+      }
+    });
     WorkpadsPanel.setContext({ screen: 'home' });
     if (WorkpadsPanel.isOpen()) WorkpadsPanel.render();
   }

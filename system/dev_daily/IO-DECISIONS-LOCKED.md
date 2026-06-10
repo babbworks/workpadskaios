@@ -2,6 +2,8 @@
 
 Product choices from stakeholder reply. Implementation tracks `UI-ROADMAP-STATUS.md` §H.
 
+> **Junction note (2026-05-24):** Round 0 reopens **product-surface and NOC** for reconciliation with glyph/protocol docs. **C7 Need/Offer/Connection** is **provisional** until [`ROUND-A1-NOC-REVIEW.md`](ROUND-A1-NOC-REVIEW.md) locks — do not expand wire or wizard scope until then. Financial framing (COGS, Job Inputs, C6 defer) remains unless A1 says otherwise. See [`JUNCTION-DECISIONS-LOCKED.md`](JUNCTION-DECISIONS-LOCKED.md).
+
 ## Financial framing
 
 | Topic | Decision |
@@ -15,8 +17,8 @@ Product choices from stakeholder reply. Implementation tracks `UI-ROADMAP-STATUS
 | Topic | Decision |
 |-------|----------|
 | **Inputs** | Treat as **needs** or **Sourced / Unsourced Inputs**; labour individuated per headcount + role when listed |
-| **C7 scope** | **Full** — Need, Offer, Connection as `record_type` values with create + view |
-| **Connection** | Bridge / relay only; viewer **cannot** make Offer; can point toward someone |
+| **C7 scope** | **Hybrid (A1):** `need`/`offer`/`connection` types; Outcome-only create default; full wizards for power users; wire on `#1pv/` only — see `PRODUCT-SURFACE-LOCKED.md` |
+| **Connection** | Bridge / relay; can point toward someone — **A1 (2026-05-24):** viewer **may** create Offer from connection context; see [`PRODUCT-SURFACE-LOCKED.md`](PRODUCT-SURFACE-LOCKED.md) |
 | **Pure connection** | Standalone gatekeeper record; same machinery as referrals; ack + type (e.g. sale confirmed) |
 | **Offer** | Resource binding — distinct from Connection relay |
 

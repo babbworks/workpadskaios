@@ -365,6 +365,22 @@
         return;
       }
     }
+    if (opts.prefillName) {
+      var pn = String(opts.prefillName).trim();
+      var ci, found = null;
+      for (ci = 0; ci < catalogue.length; ci++) {
+        if ((catalogue[ci].name || '').toLowerCase() === pn.toLowerCase()) {
+          found = catalogue[ci];
+          break;
+        }
+      }
+      selectedItem = found || { id: '_rollup', name: pn, price: '' };
+      qty = lastQty || '1';
+      price = selectedItem.price || '';
+      phase = 'tally';
+      renderTally();
+      return;
+    }
     renderCatalogue();
   }
 

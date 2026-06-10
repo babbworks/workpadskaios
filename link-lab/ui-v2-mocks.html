@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en" data-ui-theme="v2">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workpads — UI v2 gap mocks</title>
+  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="../css/workpads-ui-v2.css">
+  <style>
+    body { width: auto !important; height: auto !important; overflow: auto !important; padding: 16px; background: var(--wp-page, #d8d4cc); }
+    .lab-row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 28px; }
+    .lab-cap { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #666; margin-bottom: 8px; width: 100%; }
+    .mock-screen { width: 240px; border: 2px solid #1a1a1a; background: #fff; overflow: hidden; box-shadow: 4px 4px 0 #9a9088; }
+    .mock-screen .content { flex: 1; overflow: hidden; }
+    .mock-screen.screen { position: relative; display: flex !important; height: 320px; }
+    a { color: #1d4ed8; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <h1 style="font-size:14px;margin-bottom:6px;">UI v2 — reference mocks (in-repo)</h1>
+  <p style="font-size:11px;color:#555;max-width:520px;line-height:1.5;margin-bottom:16px;">
+    Reuses <code>workpads-ui-v2.css</code> + <code>data-ui-theme="v2"</code>. Canonical full grids:
+    <a href="../../research/card-screen-types/record-lists.html">record-lists.html</a>,
+    <a href="../../research/card-screen-types/job-overview.html">job-overview.html</a>.
+  </p>
+  <p class="nav"><a href="index.html">Hub</a></p>
+
+  <p class="lab-cap">RL-01 · List (record-lists pattern)</p>
+  <div class="lab-row">
+    <div class="mock-screen screen active">
+      <div class="zh"><div class="rail"><div class="g g-rec">⊙</div><div class="t t-title">All Records</div></div></div>
+      <div class="filter-bar"><span class="fb-glyph">▦</span><span class="fb-label">RECENT · ALL TYPES</span><span class="fb-count">47</span></div>
+      <div class="content">
+        <div class="lrow lrow-priority"><div class="lg" style="color:#be123c">▲</div><div class="lb"><div class="lt">Foundation Pour</div><div class="ls">⊗ Blocked · ‼ OVERDUE</div></div><div class="la">›</div></div>
+        <div class="lrow lrow-unread"><div class="lg" style="color:var(--wp-go-fg)">◼</div><div class="lb"><div class="lt">Midlands B&amp;C</div><div class="ls">INV-089 · GHS 4,850</div></div><div class="la">›</div></div>
+        <div class="lrow tok"><div class="lg" style="color:var(--wp-ok-fg)">◆</div><div class="lb"><div class="lt">K. Asante</div><div class="ls">PAY-018 · GHS 750</div></div><div class="la">›</div></div>
+      </div>
+      <div class="softkey wp-v2-sk"><div class="sk">Menu</div><div class="sk sk-center">Open</div><div class="sk">Filter</div></div>
+    </div>
+  </div>
+
+  <p class="lab-cap">MO/SF · Picker + filter sheet (gap fill)</p>
+  <div class="lab-row">
+    <div class="mock-screen screen active">
+      <div class="zh"><div class="rail"><div class="g">▦</div><div class="t t-title">Sort &amp; filter</div></div></div>
+      <div class="content">
+        <div class="lrow col-selected"><div class="lg">⊙</div><div class="lb"><div class="lt">Recent first</div></div><div class="la">✓</div></div>
+        <div class="lrow"><div class="lg"></div><div class="lb"><div class="lt">By type</div></div><div class="la"></div></div>
+        <div class="lrow"><div class="lg">◐</div><div class="lb"><div class="lt">Open obligations</div></div><div class="la"></div></div>
+      </div>
+      <div class="softkey wp-v2-sk"><div class="sk">Cancel</div><div class="sk sk-center">Apply</div><div class="sk"></div></div>
+    </div>
+  </div>
+
+  <p class="lab-cap">PL-02 · Job lens worker slice (job-overview pattern)</p>
+  <div class="lab-row">
+    <div class="mock-screen screen active">
+      <div class="zh">
+        <div class="rail"><div class="g g-rec">⊞</div><div class="t t-title">BLDG-C-009</div></div>
+        <div class="rail"><div class="g"></div><div class="t t-muted">Foundation pour · Day 12</div></div>
+      </div>
+      <div class="zone-section-head">your tasks</div>
+      <div class="summary-bar">
+        <div class="sb"><span class="ok">☑</span><span class="ok">2</span></div>
+        <div class="sb"><span class="go">⟳</span><span class="go">1</span></div>
+        <div class="sb"><span class="no">○</span><span>1</span></div>
+      </div>
+      <div class="content">
+        <div class="lrow tgo"><div class="lg">▶</div><div class="lb"><div class="lt">Pour slab B</div><div class="ls">⟳ Active</div></div><div class="la">›</div></div>
+      </div>
+      <div class="softkey wp-v2-sk"><div class="sk">Back</div><div class="sk sk-center">Open</div><div class="sk">Tasks</div></div>
+    </div>
+  </div>
+
+  <p class="lab-cap">ED · Field table (editor gap fill)</p>
+  <div class="lab-row">
+    <div class="mock-screen screen active">
+      <div class="zh"><div class="rail"><div class="g g-rec">◼</div><div class="t t-title">Invoice</div></div></div>
+      <div class="content">
+        <div class="field"><div class="fl">Customer</div><div class="fv">Midlands B&amp;C Ltd</div></div>
+        <div class="field"><div class="fl">Amount</div><div class="fv go">GHS 4,850</div></div>
+        <div class="field"><div class="fl">Date</div><div class="fv">2026-05-20</div></div>
+      </div>
+      <div class="softkey wp-v2-sk"><div class="sk">Back</div><div class="sk sk-center">Save</div><div class="sk">Share</div></div>
+    </div>
+  </div>
+</body>
+</html>

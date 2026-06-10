@@ -86,10 +86,31 @@
     });
     rows.push({
       kind: 'toggle',
+      key: 'obligations',
+      label: 'Open obligations',
+      selected: ctx.obligationsFilter,
+    });
+    rows.push({
+      kind: 'toggle',
+      key: 'rhythmNet',
+      label: 'Rhythm network only',
+      selected: ctx.rhythmNetFilter,
+    });
+    rows.push({
+      kind: 'toggle',
       key: 'group',
       label: 'Group by type',
       selected: ctx.listGroupOn,
     });
+    rows.push({
+      kind: 'toggle',
+      key: 'saleRollup',
+      label: 'Group sales by item',
+      selected: ctx.saleRollupOn !== false,
+    });
+    rows.push({ kind: 'header', label: 'More' });
+    rows.push({ kind: 'action', key: 'density', label: 'Density: ' + (ctx.densityLabel || 'Normal') });
+    rows.push({ kind: 'action', key: 'connections', label: 'Connections' });
 
     return rows;
   }
@@ -136,7 +157,13 @@
     if (row.kind === 'toggle') {
       if (row.key === 'focus') state.focusMode = !state.focusMode;
       if (row.key === 'pending') state.sharePendingFilter = !state.sharePendingFilter;
+      if (row.key === 'obligations') state.obligationsFilter = !state.obligationsFilter;
+      if (row.key === 'rhythmNet') state.rhythmNetFilter = !state.rhythmNetFilter;
       if (row.key === 'group') state.listGroupOn = !state.listGroupOn;
+      if (row.key === 'saleRollup' && global.SaleRollup) {
+        SaleRollup.setEnabled(!SaleRollup.enabled());
+        state.saleRollupOn = SaleRollup.enabled();
+      }
     }
   }
 

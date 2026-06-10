@@ -1,4 +1,4 @@
-// Screen: Management — User | Records | Personal | Activities | My Templates tabs
+// Screen: Management — Settings | Records | Personal | Activities | My Templates tabs
 // My Templates = RecordTemplateService (Personal / Imported / awaiting import)
 // Exposes: window.ManagementScreen
 
@@ -20,9 +20,17 @@
   var tplItems      = [];
   var tplFocusIdx   = 0;
   var tplScopeTab   = 'personal'; // 'personal' | 'imported'
-  var tplMode       = 'list';     // 'list' | 'pending-list' | 'form' | 'confirm-delete'
+  var tplMode       = 'list';     // 'list' | 'pending-list' | 'pending-detail' | 'confirm-delete'
   var tplEditId     = null;
   var tplDelPending = null;
+  var tplPreviewId  = null;
+  var tplFlashMsg   = '';
+
+  // ── Presentation library (Notes tab) ─────────────────────────────────────
+  var presItems      = [];
+  var presFocusIdx   = 0;
+  var presMode       = 'list';
+  var presPreviewUri = null;
 
   var TPL_TYPE_OPTS = [
     { val: '',        label: 'Job'      },
@@ -40,9 +48,54 @@
     { val: 'custom',   label: 'Custom %'  },
   ];
 
+  function uiThemeRow() {
+    if (!global.UITheme || !UITheme.list) return '';
+    var cur = UITheme.get();
+    var item = null;
+    var all = UITheme.list();
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].id === cur) item = all[i];
+    }
+    return '<div class="view-field" id="mgmt-theme-row" style="cursor:pointer;margin-bottom:8px;">' +
+      '<div class="view-field-label">Theme (master)</div>' +
+      '<div class="view-field-value">' +
+        '<span class="badge badge-accent">' + esc(item ? item.label : cur) + '</span>' +
+        ' <span style="font-size:10px;color:var(--text-muted);">tap to cycle · v2 = slate + white</span>' +
+      '</div></div>';
+  }
+
+  function uiPhase6Rows() {
+    if (!global.UIPhase || !UIPhase.list) return '';
+    var keys = UIPhase.PHASE6_KEYS || ['card_frame', 'list_glyphs', 'chain_spine', 'list_l0_strip'];
+    var html = '<div class="view-field" id="mgmt-phase6-all" style="cursor:pointer;margin-bottom:6px;">' +
+      '<div class="view-field-label">Display (Phase 6)</div>' +
+      '<div class="view-field-value">' +
+        '<span class="badge badge-accent">Enable all</span>' +
+        ' <span style="font-size:10px;color:var(--text-muted);">card + list + spine + L0</span>' +
+      '</div></div>';
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var item = null;
+      var all = UIPhase.list();
+      for (var j = 0; j < all.length; j++) {
+        if (all[j].key === k) item = all[j];
+      }
+      if (!item) continue;
+      html += '<div class="view-field mgmt-phase-row" data-phase-key="' + esc(k) + '" style="cursor:pointer;">' +
+        '<div class="view-field-label">' + esc(item.label) + '</div>' +
+        '<div class="view-field-value">' +
+          (item.on
+            ? '<span class="badge badge-accent">On</span>'
+            : '<span class="badge">Off</span>') +
+          ' <span style="font-size:10px;color:var(--text-muted);">tap to toggle</span>' +
+        '</div></div>';
+    }
+    return html;
+  }
+
   function uiPhaseToggleRows() {
     if (!global.UIPhase || !UIPhase.list) return '';
-    var keys = ['progressive_form', 'in_out_frame', 'capture_lens'];
+    var keys = ['progressive_form', 'in_out_frame', 'capture_lens', 'relational_encode', 'relations_home'];
     var html = '';
     for (var i = 0; i < keys.length; i++) {
       var k = keys[i];
@@ -167,27 +220,52 @@
 
   // ── Activities tab ─────────────────────────────────────────────────────
 
+  function actFocusCreate() {
+    actFocusIdx = -1;
+    applyActFocus();
+    var inp = document.getElementById('act-new-input');
+    if (inp) {
+      setTimeout(function() {
+        inp.focus();
+        inp.scrollIntoView({ block: 'nearest' });
+      }, 0);
+    }
+  }
+
   function renderActivities() {
     actDelPending = null;
     actItems = WorkActivityService.listAll();
+    if (actFocusIdx >= actItems.length) actFocusIdx = Math.max(0, actItems.length - 1);
     var rows = actItems.map(function(act, i) {
+      var meta = (typeof WPActivityTaxonomy !== 'undefined') ? WPActivityTaxonomy.metaLine(act) : '';
       return '<div class="act-item' + (actFocusIdx === i ? ' focused' : '') + '" data-act-idx="' + i + '">' +
+        '<span class="act-dot" style="background:' + esc(act.color || '#4a9eff') + '"></span>' +
         '<span class="act-name">' + esc(act.name) + '</span>' +
+        (meta ? '<span class="act-meta">' + esc(meta) + '</span>' : '') +
         '<span class="act-del" data-act-del="' + esc(act.id) + '">\u00d7</span>' +
         '</div>';
     }).join('');
-    el.content.innerHTML =
-      '<div class="act-new-row" id="act-new-row">' +
-        '<input class="field-input act-new-input" id="act-new-input" ' +
-          'placeholder="New activity name\u2026" autocomplete="off" autocorrect="off" spellcheck="false">' +
-        '<span class="badge badge-accent act-add-btn" id="act-add-btn">Add</span>' +
-      '</div>' +
+    var createHtml = (typeof WPActivityTaxonomy !== 'undefined')
+      ? WPActivityTaxonomy.renderManagementCreate(null, 'name')
+      : ('<div class="act-new-row" id="act-new-row">' +
+          '<input class="field-input act-new-input" id="act-new-input" ' +
+            'placeholder="New activity name\u2026" autocomplete="off" autocorrect="off" spellcheck="false">' +
+          '<span class="badge badge-accent act-add-btn" id="act-add-btn">Add</span></div>');
+    var barHtml = '<div class="mgmt-act-bar">' +
+      '<span class="act-sq-new" id="act-header-new" title="New activity">+</span>' +
+      '<span class="mgmt-act-bar-hint">Activities</span></div>';
+    el.content.innerHTML = barHtml + createHtml +
       (actItems.length ? rows : '<div class="empty-state" style="font-size:11px;">No activities yet.</div>');
     bindActivityEvents();
-    if (el.csk) el.csk.textContent = actItems.length ? 'Delete' : '';
+    if (el.csk) el.csk.textContent = actItems.length ? 'Delete' : 'New';
   }
 
   function bindActivityEvents() {
+    var headerNew = document.getElementById('act-header-new');
+    if (headerNew) headerNew.addEventListener('click', actFocusCreate);
+    if (typeof WPActivityTaxonomy !== 'undefined' && el.content) {
+      WPActivityTaxonomy.wirePills(el.content);
+    }
     var addBtn = document.getElementById('act-add-btn');
     if (addBtn) {
       addBtn.addEventListener('click', function() { actAdd(); });
@@ -213,12 +291,31 @@
   }
 
   function actAdd() {
-    var inp = document.getElementById('act-new-input');
-    if (!inp) return;
-    var name = inp.value.trim();
-    if (!name) { inp.focus(); return; }
-    WorkActivityService.create(name);
+    var draft, fields, name, inp, created, i;
+    if (typeof WPActivityTaxonomy !== 'undefined') {
+      draft = WPActivityTaxonomy.readManagementDraft();
+      name = draft.name;
+      if (!name) {
+        inp = document.getElementById('act-new-input');
+        if (inp) inp.focus();
+        return;
+      }
+      fields = WPActivityTaxonomy.toStoreFields(draft);
+      created = WorkActivityService.create(name, fields);
+    } else {
+      inp = document.getElementById('act-new-input');
+      if (!inp) return;
+      name = inp.value.trim();
+      if (!name) { inp.focus(); return; }
+      created = WorkActivityService.create(name);
+    }
+    actItems = WorkActivityService.listAll();
     actFocusIdx = 0;
+    if (created && created.id) {
+      for (i = 0; i < actItems.length; i++) {
+        if (actItems[i].id === created.id) { actFocusIdx = i; break; }
+      }
+    }
     renderActivities();
   }
 
@@ -333,19 +430,23 @@
 
   function renderTemplates() {
     if (tplMode === 'confirm-delete') { renderTplDeleteConfirm(); return; }
+    if (tplMode === 'pending-detail') { renderTplPendingDetail(); return; }
 
     tplItems = tplLoadItems();
     if (tplFocusIdx >= tplItems.length) tplFocusIdx = Math.max(0, tplItems.length - 1);
 
     var pendingN = tplPendingCount();
     var awaitBar = '';
-    if (tplMode === 'list' && tplScopeTab === 'imported' && pendingN > 0) {
+    if (tplMode === 'list' && pendingN > 0) {
       awaitBar =
         '<div class="act-item" data-tpl-await-bar="1" style="border:1px dashed var(--accent);cursor:pointer;">' +
           '<span class="act-name" style="color:var(--accent);">' + pendingN + ' awaiting import</span>' +
           '<span class="badge" style="font-size:9px;">Review</span>' +
         '</div>';
     }
+    var flashBar = tplFlashMsg
+      ? '<div class="tpl-flash-bar">' + esc(tplFlashMsg) + ' received — review below</div>'
+      : '';
 
     var rows = tplItems.map(function(t, i) {
       var foc = (tplFocusIdx === i) ? ' focused' : '';
@@ -382,11 +483,11 @@
       : '';
 
     el.content.innerHTML =
-      scopeBar + hdr + newRow + awaitBar +
+      flashBar + scopeBar + hdr + newRow + awaitBar +
       (tplItems.length ? rows : '<div class="empty-state" style="font-size:11px;">' + emptyMsg + '</div>');
 
     if (el.csk) {
-      if (tplMode === 'pending-list') el.csk.textContent = tplItems.length ? 'Import' : '';
+      if (tplMode === 'pending-list') el.csk.textContent = tplItems.length ? 'View' : '';
       else el.csk.textContent = tplItems.length ? 'Apply' : '';
     }
 
@@ -426,7 +527,11 @@
         };
       })(ri));
       rows2[ri].addEventListener('dblclick', (function(idx) {
-        return function() { tplFocusIdx = idx; tplDoPrimary(tplItems[idx]); };
+        return function() {
+          tplFocusIdx = idx;
+          if (tplMode === 'pending-list') tplOpenPendingDetail(tplItems[idx].id);
+          else tplDoPrimary(tplItems[idx]);
+        };
       })(ri));
     }
     applyTplFocus();
@@ -435,14 +540,65 @@
   function tplDoPrimary(tpl) {
     if (!tpl) return;
     if (tplMode === 'pending-list') {
-      RecordTemplateService.importTemplate(tpl.id);
-      tplScopeTab = 'imported';
-      tplMode = 'list';
-      tplFocusIdx = 0;
-      renderTemplates();
+      tplImportOne(tpl.id);
       return;
     }
     tplApply(tpl);
+  }
+
+  function tplImportOne(id) {
+    RecordTemplateService.importTemplate(id);
+    tplScopeTab = 'imported';
+    tplMode = 'list';
+    tplPreviewId = null;
+    tplFlashMsg = '';
+    tplFocusIdx = 0;
+    renderTemplates();
+  }
+
+  function tplOpenPendingDetail(id) {
+    tplPreviewId = id;
+    tplMode = 'pending-detail';
+    renderTemplates();
+  }
+
+  function renderTplPendingDetail() {
+    var tpl = tplPreviewId ? RecordTemplateService.get(tplPreviewId) : null;
+    if (!tpl) {
+      tplMode = 'pending-list';
+      tplPreviewId = null;
+      renderTemplates();
+      return;
+    }
+    var lines = (global.WPTemplateReceive && WPTemplateReceive.summarize)
+      ? WPTemplateReceive.summarize(tpl)
+      : [tpl.name || '(unnamed)'];
+    var body = lines.map(function(ln) {
+      return '<div class="tpl-preview-line">' + esc(ln) + '</div>';
+    }).join('');
+    el.content.innerHTML =
+      '<div class="tpl-preview-hdr">Awaiting import</div>' +
+      '<div class="tpl-preview-box">' + body + '</div>' +
+      '<div class="tpl-preview-actions">' +
+        '<span class="badge badge-accent" id="tpl-import-one">Import</span>' +
+        '<span class="badge" id="tpl-review-one">Edit first</span>' +
+        '<span class="badge badge-danger" id="tpl-dismiss-one">Dismiss</span>' +
+      '</div>' +
+      '<div style="font-size:10px;color:var(--text-muted);padding:8px 10px;">Back = pending list</div>';
+    if (el.csk) el.csk.textContent = 'Import';
+    document.getElementById('tpl-import-one').addEventListener('click', function() {
+      tplImportOne(tpl.id);
+    });
+    document.getElementById('tpl-review-one').addEventListener('click', function() {
+      App.showTemplateCreator({ editId: tpl.id, returnTo: 'management', adoptOnSave: true });
+    });
+    document.getElementById('tpl-dismiss-one').addEventListener('click', function() {
+      if (global.WPTemplateReceive) WPTemplateReceive.dismissPending(tpl.id);
+      tplPreviewId = null;
+      tplMode = 'pending-list';
+      tplFocusIdx = 0;
+      renderTemplates();
+    });
   }
 
   function applyTplFocus() {
@@ -501,9 +657,21 @@
       if (key === 'Backspace') { tplDelPending = null; tplMode = 'list'; renderTemplates(); }
       return;
     }
+    if (tplMode === 'pending-detail') {
+      if (key === 'Backspace') {
+        tplMode = 'pending-list';
+        tplPreviewId = null;
+        renderTemplates();
+        return;
+      }
+      if (key === 'Enter' || key === 'SoftRight') {
+        if (tplPreviewId) tplImportOne(tplPreviewId);
+      }
+      return;
+    }
     if (tplMode === 'pending-list') {
       if (key === 'Backspace') {
-        tplMode = 'list'; tplScopeTab = 'imported'; tplFocusIdx = 0; renderTemplates();
+        tplMode = 'list'; tplScopeTab = 'imported'; tplFocusIdx = 0; tplFlashMsg = ''; renderTemplates();
         return;
       }
       switch (key) {
@@ -514,13 +682,11 @@
           if (tplFocusIdx < tplItems.length - 1) { tplFocusIdx++; applyTplFocus(); }
           break;
         case 'Enter':
+          if (tplItems[tplFocusIdx]) tplOpenPendingDetail(tplItems[tplFocusIdx].id);
+          break;
         case 'SoftRight':
           if (tplItems[tplFocusIdx]) {
-            if (key === 'SoftRight') {
-              App.showTemplateCreator({ editId: tplItems[tplFocusIdx].id, returnTo: 'management', adoptOnSave: true });
-            } else {
-              tplDoPrimary(tplItems[tplFocusIdx]);
-            }
+            tplImportOne(tplItems[tplFocusIdx].id);
           }
           break;
       }
@@ -590,9 +756,16 @@
         '<div class="view-field-label">Connections</div>' +
         '<div class="view-field-value">Rhythm view (rel-volume) <span class="badge" style="margin-left:6px;">Open</span></div>' +
       '</div>' +
+      '<div class="view-field" id="mgmt-symbols-row" style="cursor:pointer;">' +
+        '<div class="view-field-label">Symbol tables</div>' +
+        '<div class="view-field-value">Per-peer short names for #1pv/ <span class="badge" style="margin-left:6px;">Manage</span></div>' +
+      '</div>' +
       (global.RelVolumeSettings ? RelVolumeSettings.renderSection() : '') +
       '<div class="view-sec-hdr">App</div>' +
       uiPhaseToggleRows() +
+      '<div class="view-sec-hdr">Display</div>' +
+      uiThemeRow() +
+      uiPhase6Rows() +
       '<div class="view-field" id="mgmt-home-toggle" style="cursor:pointer;">' +
         '<div class="view-field-label">Home Screen (boot)</div>' +
         '<div class="view-field-value" id="mgmt-home-val">' +
@@ -624,6 +797,22 @@
 
     wireUiPhaseToggles();
 
+    var themeRow = document.getElementById('mgmt-theme-row');
+    if (themeRow && global.UITheme && UITheme.cycle) {
+      themeRow.addEventListener('click', function() {
+        UITheme.cycle();
+        renderSettings();
+      });
+    }
+
+    var p6All = document.getElementById('mgmt-phase6-all');
+    if (p6All && global.UIPhase && UIPhase.enablePhase6) {
+      p6All.addEventListener('click', function() {
+        UIPhase.enablePhase6();
+        renderSettings();
+      });
+    }
+
     var jiRow = document.getElementById('mgmt-job-inputs-row');
     if (jiRow && global.IOLabels) {
       jiRow.addEventListener('click', function() {
@@ -636,6 +825,12 @@
     var connRow = document.getElementById('mgmt-connections-row');
     if (connRow) {
       connRow.addEventListener('click', function() { App.showConnections(); });
+    }
+    var symRow = document.getElementById('mgmt-symbols-row');
+    if (symRow && global.App && App.showSymbols) {
+      symRow.addEventListener('click', function() {
+        App.showSymbols({ returnTo: 'management' });
+      });
     }
     if (global.RelVolumeSettings) RelVolumeSettings.wire(el.content);
 
@@ -674,6 +869,143 @@
     renderSettings();
   }
 
+  function renderPresentation() {
+    if (typeof WPPresentationLibrary === 'undefined') {
+      el.content.innerHTML = '<div class="empty-state">Presentation library unavailable.</div>';
+      return;
+    }
+    if (presMode === 'preview' && presPreviewUri) {
+      var html = WPPresentationLibrary.previewHtml(presPreviewUri);
+      var item = presItems[presFocusIdx];
+      el.content.innerHTML =
+        '<div class="pres-preview-hdr">' + esc(item ? item.name : 'Preview') + '</div>' +
+        '<div class="pres-preview-frame">' + html + '</div>' +
+        '<div style="font-size:10px;color:var(--text-muted);padding:6px 10px;">Back = library \u00b7 CSK = try in Note share</div>';
+      if (el.csk) el.csk.textContent = 'Share';
+      return;
+    }
+
+    WPPresentationLibrary.ensureBundled();
+    presItems = WPPresentationLibrary.starterCatalog();
+    if (presFocusIdx >= presItems.length) presFocusIdx = Math.max(0, presItems.length - 1);
+
+    var installedN = 0;
+    var rows = presItems.map(function(p, i) {
+      if (p.installed) installedN++;
+      var foc = presFocusIdx === i ? ' focused' : '';
+      var badge = p.installed
+        ? '<span class="badge badge-accent" style="font-size:9px;">On device</span>'
+        : '<span class="badge" style="font-size:9px;">Not installed</span>';
+      return '<div class="act-item pres-item' + foc + '" data-pres-idx="' + i + '">' +
+        '<span class="act-name">' + esc(p.name) + '</span>' +
+        badge +
+        '<div class="pres-blurb">' + esc(p.blurb) + '</div>' +
+      '</div>';
+    }).join('');
+
+    el.content.innerHTML =
+      '<div class="pres-lib-hdr">Presentation templates for shared notes (<code>#n1/</code>). ' +
+        'Distinct from My Templates (record presets).</div>' +
+      '<div class="pres-lib-stats">' + installedN + ' / ' + presItems.length + ' starters on device</div>' +
+      '<div class="act-new-row">' +
+        '<span class="badge badge-accent act-add-btn" id="pres-install-all" style="cursor:pointer;">Install all starters</span>' +
+      '</div>' +
+      (rows || '<div class="empty-state">No starters defined.</div>');
+
+    if (el.csk) {
+      var cur = presItems[presFocusIdx];
+      el.csk.textContent = cur && cur.installed ? 'Remove' : 'Install';
+    }
+
+    var allBtn = document.getElementById('pres-install-all');
+    if (allBtn) {
+      allBtn.addEventListener('click', function() {
+        WPPresentationLibrary.ensureBundled();
+        presItems = WPPresentationLibrary.starterCatalog();
+        renderPresentation();
+      });
+    }
+    var presRows = el.content.querySelectorAll('[data-pres-idx]');
+    for (var pi = 0; pi < presRows.length; pi++) {
+      presRows[pi].addEventListener('click', (function(idx) {
+        return function() {
+          presFocusIdx = idx;
+          applyPresFocus();
+        };
+      })(pi));
+    }
+    applyPresFocus();
+  }
+
+  function applyPresFocus() {
+    var nodes = el.content.querySelectorAll('.act-item[data-pres-idx]');
+    nodes.forEach(function(n) { n.classList.remove('focused'); });
+    if (presFocusIdx >= 0 && presFocusIdx < nodes.length) {
+      nodes[presFocusIdx].classList.add('focused');
+      nodes[presFocusIdx].scrollIntoView({ block: 'nearest' });
+    }
+    if (el.csk && presItems[presFocusIdx]) {
+      el.csk.textContent = presItems[presFocusIdx].installed ? 'Remove' : 'Install';
+    }
+  }
+
+  function presToggleInstall() {
+    var p = presItems[presFocusIdx];
+    if (!p || typeof WPPresentationLibrary === 'undefined') return;
+    if (p.installed) {
+      WPPresentationLibrary.removeStarter(p.uri);
+    } else {
+      WPPresentationLibrary.installStarter(p.uri);
+    }
+    presItems = WPPresentationLibrary.starterCatalog();
+    renderPresentation();
+  }
+
+  function presOnKey(key) {
+    if (presMode === 'preview') {
+      if (key === 'Backspace') {
+        presMode = 'list';
+        presPreviewUri = null;
+        renderPresentation();
+        return;
+      }
+      if (key === 'Enter' || key === 'SoftRight') {
+        var cap = {
+          text: (global.WPPresentationStarters && WPPresentationStarters.SAMPLE_NOTE)
+            ? WPPresentationStarters.SAMPLE_NOTE.text : 'Sample note',
+          timestamp: Date.now(),
+          linkedRecordId: null,
+        };
+        if (cap.text && presPreviewUri && global.NoteCodec) {
+          cap._preferredTpl = presPreviewUri;
+        }
+        App.showNoteShare(cap);
+      }
+      return;
+    }
+    switch (key) {
+      case 'ArrowUp':
+        if (presFocusIdx > 0) { presFocusIdx--; applyPresFocus(); }
+        break;
+      case 'ArrowDown':
+        if (presFocusIdx < presItems.length - 1) { presFocusIdx++; applyPresFocus(); }
+        break;
+      case 'Enter':
+        if (presItems[presFocusIdx]) {
+          presPreviewUri = presItems[presFocusIdx].uri;
+          presMode = 'preview';
+          renderPresentation();
+        }
+        break;
+      case 'SoftRight':
+        presToggleInstall();
+        break;
+      case 'Backspace':
+        App.showList();
+        break;
+    }
+  }
+
   // ── Tab switching ──────────────────────────────────────────────────────
 
   function setTab(tab) {
@@ -690,6 +1022,10 @@
       case 'templates':
         tplMode = 'list'; tplFocusIdx = 0; renderTemplates();
         break;
+      case 'present':
+        presMode = 'list'; presPreviewUri = null; presFocusIdx = 0;
+        renderPresentation();
+        break;
       case 'user':       renderSettings();                             break;
     }
   }
@@ -700,7 +1036,7 @@
     opts = opts || {};
     var tab = opts.tab;
     if (tab === 'templates' || tab === 'user' || tab === 'records' ||
-        tab === 'personal' || tab === 'activities') {
+        tab === 'personal' || tab === 'activities' || tab === 'present') {
       setTab(tab);
     } else {
       setTab('records');
@@ -709,18 +1045,23 @@
       if (opts.tplScope === 'imported' || opts.tplScope === 'personal') {
         tplScopeTab = opts.tplScope;
       }
-      if (opts.tplMode === 'pending-list') {
+      if (opts.tplFlash) tplFlashMsg = 'Template \u201c' + opts.tplFlash + '\u201d';
+      if (opts.tplMode === 'pending-list' || opts.tplPreviewId) {
         tplScopeTab = 'imported';
         tplMode = 'pending-list';
         tplFocusIdx = 0;
+      }
+      if (opts.tplPreviewId) {
+        tplOpenPendingDetail(opts.tplPreviewId);
+      } else if (opts.tplMode === 'pending-list') {
         renderTemplates();
       }
     }
   }
 
   function onKey(key) {
-    // Tab order: User | Records | Personal | Activities | My Templates
-    var tabs = ['user', 'records', 'personal', 'activities', 'templates'];
+    // Tab order: Settings | Records | Personal | Activities | My Templates | Notes
+    var tabs = ['user', 'records', 'personal', 'activities', 'templates', 'present'];
     var idx  = tabs.indexOf(currentTab);
 
     if (key === 'ArrowLeft') {
@@ -734,6 +1075,7 @@
 
     if (currentTab === 'activities') { actOnKey(key); return; }
     if (currentTab === 'templates')  { tplOnKey(key); return; }
+    if (currentTab === 'present')  { presOnKey(key); return; }
 
     switch (key) {
       case 'Enter':
@@ -747,9 +1089,15 @@
       case '3': setTab('personal');    break;
       case '4': setTab('activities');  break;
       case '5': setTab('templates');   break;
+      case '6': setTab('present');     break;
     }
   }
 
-  global.ManagementScreen = { onShow: onShow, onKey: onKey, showTab: setTab };
+  global.ManagementScreen = {
+    onShow: onShow,
+    onKey: onKey,
+    showTab: setTab,
+    renderSettings: renderSettings,
+  };
 
 }(window));

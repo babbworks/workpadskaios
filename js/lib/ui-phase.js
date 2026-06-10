@@ -17,6 +17,7 @@
     sale_screen_lock: true,
     progressive_form: true,
     capture_lens: true,
+    relational_encode: true,
   };
 
   var FLAGS = {
@@ -68,6 +69,26 @@
       label: 'Focused round: needs/offers home',
       legacy: 'WP+ home + record list',
     },
+    card_frame: {
+      label: 'Phase 6: Glyph card on view / share preview',
+      legacy: 'PADS view sections only',
+    },
+    list_glyphs: {
+      label: 'Phase 6: Glyph prefix on list rows',
+      legacy: 'Text-only list rows',
+    },
+    chain_spine: {
+      label: 'Phase 6: Chain spine margin (when chainRef set)',
+      legacy: 'Chain via menu only',
+    },
+    list_l0_strip: {
+      label: 'Phase 6: L0 open marker (◐) on list rows',
+      legacy: 'Status pill only',
+    },
+    relational_encode: {
+      label: 'v0.4: Relational bridge ext on #1pv/ share',
+      legacy: 'Standalone pads-v1 bridge only',
+    },
   };
 
   function isOn(key) {
@@ -101,15 +122,28 @@
     return out;
   }
 
+  var PHASE6_KEYS = ['card_frame', 'list_glyphs', 'chain_spine', 'list_l0_strip'];
+
+  function enablePhase6() {
+    for (var i = 0; i < PHASE6_KEYS.length; i++) enable(PHASE6_KEYS[i]);
+  }
+
+  function disablePhase6() {
+    for (var i = 0; i < PHASE6_KEYS.length; i++) disable(PHASE6_KEYS[i]);
+  }
+
   function onBoot() {
     if (global.NavStack && NavStack.initCrumbBar) NavStack.initCrumbBar();
   }
 
   global.UIPhase = {
     FLAGS: FLAGS,
+    PHASE6_KEYS: PHASE6_KEYS,
     isOn: isOn,
     enable: enable,
     disable: disable,
+    enablePhase6: enablePhase6,
+    disablePhase6: disablePhase6,
     list: list,
     onBoot: onBoot,
   };

@@ -5,6 +5,18 @@ Format: status = `open` | `fixed` | `accepted` | `superseded`
 
 ---
 
+### DEV-WP-V2-001 — pads-v2 bridge v1 inner frame (1pv)
+
+**Description:** Legacy `#1pv/` frames with flag bit **0x01 BRIDGE_V1** embed a full pads-v1 body (uint16 length prefix). Default encode uses **native G0–G6** chunks per `native-v1-split.js` / `pathc-native.js`.
+
+**Status:** fixed (2026-05-24, phase 2b)
+
+**Rationale:** Native group bodies with per-group field slices; merge rebuilds v1 for `parseFrame`. `bridgeV1: true` retained for interop with pre-2b frames only.
+
+**References:** `js/lib/native-v1-split.js`, `js/lib/pathc-native.js`, `FRAME-SPEC-1pv-ADDENDUM.md` §8, `NATIVE-CODEC-ACTION-LOG.md`
+
+---
+
 ### DEV-WP-URL-001 — Scheme Tag Format Mismatch
 
 **Description:** workpadskaios emits the legacy URL format `https://workpads.me/p#alg=bitpad-v1&v=1&d=<payload>`. The workpads-standard and workpadsdotme expect the canonical scheme tag format `1dg/<payload>` (or `1eg/` after codebook-c).
@@ -53,17 +65,15 @@ Format: status = `open` | `fixed` | `accepted` | `superseded`
 
 ---
 
-### DEV-WP-MFT-001 — Manifest Missing Icons and Permissions
+### DEV-WP-MFT-001 — Manifest Icons and Store Assets
 
-**Description:** `manifest.webmanifest` has `"icons": []` (empty array) and `"b2g_features": { "type": "web", "permissions": {} }` (no permissions declared). The KaiOS Store requires icon assets at defined sizes and requires `clipboard-write` permission for apps that use the clipboard API.
+**Description:** KaiOS Store guidelines prefer PNG icons at defined sizes (56×56, 112×112, 128×128). Early v0.1 manifest had empty `icons` and no clipboard permissions.
 
-**Status:** open
+**Status:** accepted (2026-05-21)
 
-**Impact:** KaiOS Store submission will be rejected. Share screen clipboard copy may silently fail on some KaiOS devices without the permission declaration.
+**Resolution:** `manifest.webmanifest` v0.2.0 now declares SVG icons (`img/icon-56.svg`, `img/icon-112.svg`) and `clipboard-read` / `clipboard-write` permissions. Remaining store work: optional PNG variants if a target store rejects SVG; verify on device before submission.
 
-**Planned fix:** v0.2 Phase L — generate icon assets (56×56, 112×112, 128×128 PNG); add to manifest `icons` array with correct `sizes` and `type` fields; add `"clipboard-write": { "description": "Copy share URL to clipboard" }` to `b2g_features.permissions`.
-
-**References:** KaiOS Store submission guidelines
+**References:** KaiOS Store submission guidelines; `manifest.webmanifest`
 
 ---
 

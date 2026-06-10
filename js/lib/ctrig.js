@@ -1,4 +1,6 @@
 // ctrig.js — C-TRIG obligation bytecode evaluator
+// In index.html (P3 auto-schedule on RecordService) — see dev_daily/shrink/CTRIG-RESHELL.md
+// Tests: codec-pads-v1.test.js via readFileSync.
 // Spec: CTRIG-EVALUATOR-DESIGN.md, AGREEMENTS-DESIGN.md §3
 // Max program: 32 bytes. Max stack depth: 8. Stateless between runs.
 // Returns: { status: 'resolved'|'halted'|'error', value?: bool, reason?: string }

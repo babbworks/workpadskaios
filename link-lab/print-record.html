@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workpads — print record</title>
+  <link rel="stylesheet" href="css/link-lab.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="hdr">
+      <h1>Print record (CT-3)</h1>
+      <p>Human summary for print / SMS intro — full QR and short code use Share + Written code.</p>
+    </header>
+    <p class="nav"><a href="index.html">Hub</a> · <a href="encode.html">Encode</a></p>
+
+    <div class="card">
+      <h2>Record JSON</h2>
+      <textarea id="json" rows="8" style="width:100%;font-family:monospace;font-size:11px;"></textarea>
+      <div class="btn-row">
+        <button type="button" class="primary" id="btn-summary">Generate summary</button>
+      </div>
+    </div>
+
+    <div id="out"></div>
+  </div>
+
+  <script src="../js/lib/print-record.js"></script>
+  <script src="js/lab-common.js"></script>
+  <script src="js/print-record-page.js"></script>
+</body>
+</html>

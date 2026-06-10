@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workpads — binary QR (bq1)</title>
+  <link rel="stylesheet" href="css/link-lab.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="hdr">
+      <h1>Binary QR bridge (CT-1)</h1>
+      <p>Pack a text fragment into <code>WPQ1</code> bytes, expose as <code>#bq1/</code> for shell receive.</p>
+    </header>
+    <p class="nav"><a href="index.html">Hub</a> · <a href="p/">Shell</a></p>
+
+    <div class="card">
+      <h2>Encode</h2>
+      <label for="frag">Text fragment (e.g. 1pv/…)</label>
+      <input type="text" id="frag" placeholder="1pv/…">
+      <div class="btn-row">
+        <button type="button" class="primary" id="btn-pack">Pack → bq1</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Decode</h2>
+      <label for="bq1">bq1/ hash</label>
+      <input type="text" id="bq1" placeholder="bq1/…">
+      <div class="btn-row">
+        <button type="button" class="primary" id="btn-open">Open in shell</button>
+      </div>
+    </div>
+
+    <div id="status"></div>
+    <div id="out"></div>
+  </div>
+
+  <script src="../js/lib/binary-qr.js"></script>
+  <script src="js/lab-common.js"></script>
+  <script src="js/binary-qr-page.js"></script>
+</body>
+</html>

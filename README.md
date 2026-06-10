@@ -1,11 +1,15 @@
 # Workpads KaiOS
 
-Workpads mobile application for KaiOS 3.x devices. Creates, views, and shares portable job records from a feature phone using the PADS model and bitpad-v1 binary codec.
+Workpads mobile application for KaiOS 3.x devices. Creates, views, and shares portable job records from a feature phone using the PADS model and **pads-v1** binary codec.
 
-**Version:** v0.1.0
-**Target platform:** KaiOS 3.x (240x320px, 5-way D-pad, no touch, packaged app)
-**Codec:** bitpad-v1 + fflate deflate + base64url
-**Share format:** `https://workpads.me/p#<payload>`
+**Version:** v0.2.0  
+**Target platform:** KaiOS 3.x (240×320px, 5-way D-pad, packaged app)  
+**Codec:** pads-v1 (`#1pa/`) + fflate deflate + base64url; legacy decode for older URLs  
+**Share format:** `https://workpads.me/p#1pa/<payload>`
+
+**Cross-repo process:** [`system/project-process.md`](system/project-process.md) — read before planning or coding across workpads-standard, workpads-codec, workpads-cli, and this app.
+
+**Development-only:** `node_modules/` holds `@workpads/codec` for `npm test` — not packaged on device. The phone uses `js/lib/codec.js`. See [`system/dev_refs/JS-RUNTIME-MAP.md`](system/dev_refs/JS-RUNTIME-MAP.md).
 
 ---
 
@@ -46,13 +50,21 @@ The app is split into two conceptual engines:
 
 ### Screen Layer (`js/screens/`)
 
-| Screen | Trigger | Purpose |
-|--------|---------|---------|
-| `list.js` | Default | Scrollable record list; LSK=Manage, RSK=New |
-| `wizard.js` | New/Edit | 4-step PADS form (P/A/D/S tabs + dot progress) |
-| `view.js` | Open record | Read-only record display with RSK=Options menu |
-| `share.js` | Share option | Shows encoded URL + length; Enter copies to clipboard |
-| `management.js` | LSK from list | 3-tab screen: Records stats / Personal stats / Settings |
+Core screens (see `app.js` `SCREENS` for the full set of 22+):
+
+| Screen | Purpose |
+|--------|---------|
+| `list.js` / `home.js` | Record list or WP+ home |
+| `wizard.js` | PADS + financial wizard |
+| `view.js` | Record detail, options, chain, ACK, state commit |
+| `share.js` / `note-share.js` | Encode URL, QR, presentation/security tags |
+| `management.js` | Profile, settings, storage |
+| `archive.js` | Archived records — restore / delete |
+| `financial.js` / `finance-overview.js` | Per-record and cross-record financial views |
+| `ledger.js` / `liabilities.js` | Ledger and liabilities |
+| `chain.js` / `dispute.js` | Chain view and dispute flow |
+| `newent-wizard.js` / `template-creator.js` | NewEnt and template authoring |
+| `timeline.js` / `tasks.js` / `calendar-wp.js` | Scheduling surfaces |
 
 ### Panel Layer (`js/panels/`)
 
@@ -66,7 +78,8 @@ The app is split into two conceptual engines:
 | File | Purpose |
 |------|---------|
 | `fflate.js` | fflate 0.8.2 (MIT) — deflate/inflate, UMD bundle |
-| `codec.js` | `window.WPCodec` — bitpad-v1 encode/decode/validate for browser |
+| `codec.js` | `window.WPCodec` — pads-v1 `#1pa/` encode/decode; legacy schemes decode-only |
+| `security.js` / `anon.js` / `agreements.js` / `markers.js` / `ctrig.js` | Extended pads-v1 features |
 | `browser-dev.js` | D-pad keyboard emulator for browser testing (not for device) |
 
 ### App Router (`js/app.js`)
@@ -266,7 +279,9 @@ workpadskaios/
     app.js                    Router + D-pad dispatcher + boot
     lib/
       fflate.js               Compression library (fflate 0.8.2)
-      codec.js                WPCodec — bitpad-v1 browser codec
+      codec.js                WPCodec — pads-v1 browser codec
+  system/
+    project-process.md        Cross-repo process (read first)
       browser-dev.js          D-pad emulator for browser testing
   test/
     flow.test.js              Node.js round-trip codec tests
@@ -292,7 +307,7 @@ For UI testing on desktop: open `index.html` in a browser. `browser-dev.js` maps
 
 | Repo | Description |
 |------|-------------|
-| `workpads-codec/` | `@workpads/codec` — the same bitpad-v1 codec as an npm package |
-| `workpads-cli/` | Node.js CLI for workpad create/share (v0.x JSON encoding; v0.2 upgrades to bitpad-v1) |
-| `workpads-standard/` | Formal Workpads Standard specification |
-| `workpads/` | Original architecture documents and protocol specs |
+| `workpads-standard/` | Normative spec — pads-v1 `codec.md` |
+| `workpads-codec/` | `@workpads/codec` — npm pads-v1 encoder (CLI dependency) |
+| `workpads-cli/` | CLI v0.2 — create/share via `@workpads/codec` |
+| `system/project-process.md` | Cross-repo workflow and project state |

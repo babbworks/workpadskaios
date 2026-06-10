@@ -9,6 +9,8 @@
   var currentRecord = null;
   var navItems      = [];   // {type, record} for navigable rows
   var focusIdx      = 0;
+  var _finScrollId  = null;
+  var _finScrollTop = 0;
 
   // ── Formatting helpers ────────────────────────────────────────────────────
 
@@ -21,6 +23,9 @@
   // ── Render ────────────────────────────────────────────────────────────────
 
   function render(rec, children) {
+    var preserveScroll = _finScrollId === rec.id && !!el.content;
+    var savedScroll = preserveScroll ? el.content.scrollTop : 0;
+
     var summary  = FinancialModel.summarize(rec, children);
     var currency = rec.currency || '';
     var navReg   = [];   // accumulate navigable {type, record} entries
@@ -111,6 +116,14 @@
 
     navItems = navReg;
     el.content.innerHTML = html;
+    _finScrollId = rec.id;
+    if (preserveScroll) {
+      el.content.scrollTop = savedScroll;
+      var st = savedScroll;
+      setTimeout(function() {
+        if (currentRecord === rec && el.content) el.content.scrollTop = st;
+      }, 0);
+    }
     updateFocus();
     WorkpadsPanel.setContext({ screen: 'financial', record: rec });
   }

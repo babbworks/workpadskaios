@@ -1,0 +1,53 @@
+{
+  "version": "link-lab-scenarios-v1",
+  "obligation": {
+    "invoice": {
+      "job": "Lab invoice — open obligation",
+      "customer": "River Cafe",
+      "record_type": "invoice",
+      "date": "2026-05-24",
+      "amount": "240.00",
+      "currency": "GBP",
+      "chainRef": "LABCHAIN01",
+      "ackRequest": true,
+      "actions": [
+        { "title": "Approve amount", "notes": "" },
+        { "title": "Schedule visit", "notes": "" }
+      ]
+    },
+    "partial_payment": {
+      "job": "Partial pay",
+      "customer": "River Cafe",
+      "record_type": "payment",
+      "date": "2026-05-24",
+      "amount": "100.00",
+      "currency": "GBP",
+      "chainRef": "LABCHAIN01"
+    },
+    "full_payment": {
+      "job": "Full pay",
+      "customer": "River Cafe",
+      "record_type": "payment",
+      "date": "2026-05-24",
+      "amount": "240.00",
+      "currency": "GBP",
+      "chainRef": "LABCHAIN01"
+    }
+  },
+  "ack_parent": {
+    "job": "Parent with actions",
+    "customer": "Acme",
+    "record_type": "invoice",
+    "date": "2026-05-24",
+    "amount": "120.00",
+    "currency": "GBP",
+    "chainRef": "LABACK01",
+    "ackRequest": true,
+    "actions": [
+      { "title": "Line A", "notes": "" },
+      { "title": "Line B", "notes": "" },
+      { "title": "Line C", "notes": "" }
+    ]
+  },
+  "ack_toggles": [1, 0, 1]
+}

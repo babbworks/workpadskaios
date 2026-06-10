@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workpads — KaiOS Demo · babb.tel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:         #0e0e0e;
+      --surface:    #161616;
+      --surface2:   #1e1e1e;
+      --text:       #d4d4d4;
+      --text-dim:   #666;
+      --text-faint: #272727;
+      --accent:     #00d4aa;
+      --accent2:    #4a9eff;
+      --frame:      #1c1c1e;
+      --bezel:      #2c2c2e;
+      --shine:      #3a3a3c;
+      --key-bg:     #1e1e1e;
+      --key-border: #333;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Stage ───────────────────────────────────────── */
+
+    .stage {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      grid-template-columns: 1fr 276px 1fr;
+      grid-template-areas:
+        "header header header"
+        "left   phone  right";
+      padding: 0 44px;
+    }
+
+    /* ── Header ──────────────────────────────────────── */
+
+    .site-header {
+      grid-area: header;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 0 16px;
+      border-bottom: 1px solid var(--text-faint);
+    }
+
+    .site-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .logo-wordmark {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+
+    .logo-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+
+    .header-meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.04em;
+    }
+
+    .header-meta em { color: var(--accent2); font-style: normal; }
+
+    /* ── Panels ──────────────────────────────────────── */
+
+    .panel-left {
+      grid-area: left;
+      padding: 28px 32px 0 0;
+      align-self: start;
+      min-width: 0;
+    }
+
+    .panel-right {
+      grid-area: right;
+      padding: 28px 0 0 32px;
+      align-self: start;
+      min-width: 0;
+    }
+
+    .panel-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 14px;
+      padding-bottom: 7px;
+      border-bottom: 1px solid var(--text-faint);
+    }
+
+    /* ── D-pad ───────────────────────────────────────── */
+
+    .dpad-wrap {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+
+    .dpad {
+      display: grid;
+      grid-template-areas: ". up ." "left center right" ". down .";
+      grid-template-columns: 28px 28px 28px;
+      grid-template-rows:   26px 28px 26px;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+
+    .db { display:flex; align-items:center; justify-content:center;
+          background:var(--surface2); border:1px solid var(--key-border);
+          border-radius:4px; font-family:'JetBrains Mono',monospace;
+          font-size:10px; color:var(--text-dim); }
+    .db.up    { grid-area:up; }
+    .db.dn    { grid-area:down; }
+    .db.lt    { grid-area:left; }
+    .db.rt    { grid-area:right; }
+    .db.ct    { grid-area:center; background:var(--surface);
+                border-color:#1a3a34; color:var(--accent); font-size:14px; }
+
+    .dpad-notes { padding-top: 2px; }
+    .dpad-note  { font-size:11px; color:var(--text-dim); line-height:1.55; margin-bottom:4px; }
+    .dpad-note strong { color:var(--text); font-weight:500; }
+
+    /* ── Keys ────────────────────────────────────────── */
+
+    .key-section { margin-bottom: 16px; }
+
+    .ks-label {
+      font-family:'Syne',sans-serif; font-size:9px; font-weight:600;
+      letter-spacing:0.12em; text-transform:uppercase; color:var(--accent);
+      margin-bottom:7px;
+    }
+
+    .key-row { display:flex; align-items:center; justify-content:space-between;
+               gap:8px; margin-bottom:4px; }
+    .key-desc { font-size:11px; color:var(--text-dim); flex:1; }
+    .keys { display:flex; gap:3px; flex-shrink:0; }
+
+    .key {
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:20px; height:18px; padding:0 5px;
+      background:var(--key-bg); border:1px solid var(--key-border);
+      border-bottom:2px solid #3a3a3a; border-radius:3px;
+      font-family:'JetBrains Mono',monospace; font-size:9px;
+      font-weight:500; color:#ccc;
+    }
+    .key.hi { border-color:#1a3a34; border-bottom-color:#0d2520; color:var(--accent); }
+
+    .sk-row { display:flex; gap:6px; margin-top:10px; }
+    .sk-item { flex:1; display:flex; flex-direction:column; align-items:center;
+               gap:4px; padding:7px 4px; background:var(--surface2);
+               border:1px solid var(--text-faint); border-radius:5px; }
+    .sk-key  { font-family:'JetBrains Mono',monospace; font-size:12px;
+               font-weight:700; color:#ccc; }
+    .sk-key.hi { color:var(--accent); }
+    .sk-lbl  { font-size:9px; color:var(--text-dim); text-align:center; line-height:1.3; }
+
+    /* ── Live shortcut panel ─────────────────────────── */
+
+    .sc-header {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 12px;
+    }
+
+    .sc-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+
+    .sc-screen-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 0.04em;
+    }
+
+    .sc-list { list-style: none; }
+
+    .sc-item {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 5px 0;
+      border-bottom: 1px solid var(--text-faint);
+    }
+    .sc-item:last-child { border-bottom: none; }
+
+    .sc-key {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px; font-weight: 700;
+      color: var(--accent2); min-width: 36px; flex-shrink: 0;
+    }
+
+    .sc-lbl { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
+    .sc-empty { font-family:'JetBrains Mono',monospace; font-size:10px; color:#333; padding:6px 0; }
+
+    .about-block { margin-top:20px; padding-top:14px; border-top:1px solid var(--text-faint); }
+    .about-block p { font-size:11px; line-height:1.6; color:var(--text-dim); }
+
+    /* ── Phone ───────────────────────────────────────── */
+
+    @keyframes screen-glow {
+      0%   { box-shadow: 0 0 0 0 rgba(0,212,170,0); }
+      40%  { box-shadow: 0 0 36px 10px rgba(0,212,170,0.2); }
+      100% { box-shadow: 0 0 0 0 rgba(0,212,170,0); }
+    }
+
+    .phone-wrap {
+      grid-area: phone;
+      display: flex;
+      align-items: flex-end;    /* anchor to bottom */
+      justify-content: center;
+    }
+
+    .phone-outer {
+      position: relative;
+      /* side hardware buttons */
+    }
+
+    /* left button (volume / back) */
+    .phone-outer::before {
+      content: '';
+      position: absolute;
+      left: -5px; top: 60px;
+      width: 4px; height: 30px;
+      background: var(--bezel);
+      border-radius: 3px 0 0 3px;
+      box-shadow: inset 1px 0 0 rgba(255,255,255,0.04), 0 36px 0 var(--bezel);
+    }
+
+    /* right button (volume) */
+    .phone-outer::after {
+      content: '';
+      position: absolute;
+      right: -5px; top: 60px;
+      width: 4px; height: 44px;
+      background: var(--bezel);
+      border-radius: 0 3px 3px 0;
+      box-shadow: inset -1px 0 0 rgba(255,255,255,0.04);
+    }
+
+    .phone-frame {
+      position: relative;
+      width: 276px;
+      background: linear-gradient(180deg, #242426 0%, #1a1a1c 60%, #141414 100%);
+      border-radius: 26px 26px 0 0;       /* squared bottom — bleeds to viewport edge */
+      border: 1.5px solid var(--bezel);
+      border-bottom: none;
+      box-shadow:
+        0 0 0 1px #080808,
+        -12px 0 40px rgba(0,0,0,0.5),
+        12px 0 40px rgba(0,0,0,0.5),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+      padding: 16px 14px 0;              /* no bottom padding */
+    }
+
+    .phone-top {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .phone-speaker {
+      width: 46px; height: 4px;
+      background: var(--shine); border-radius: 2px;
+    }
+
+    .phone-cam {
+      width: 6px; height: 6px;
+      background: #1a1a26; border-radius: 50%;
+      border: 1px solid var(--shine);
+    }
+
+    .phone-screen {
+      width: 240px; height: 320px;
+      border-radius: 2px 2px 0 0;
+      overflow: hidden;
+      background: #000;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.9);
+      animation: screen-glow 2.4s ease-out 0.4s 1 forwards;
+    }
+
+    .phone-screen iframe {
+      width: 240px; height: 320px;
+      border: none; display: block;
+    }
+
+    /* ── Responsive ──────────────────────────────────── */
+
+    @media (max-width: 860px) {
+      .panel-left, .panel-right { display: none; }
+      .stage {
+        grid-template-columns: 1fr;
+        grid-template-areas: "header" "phone";
+        padding: 0 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="stage">
+
+  <header class="site-header">
+    <div class="site-logo">
+      <div class="logo-icon">
+        <svg width="28" height="28" viewBox="0 0 112 112" xmlns="http://www.w3.org/2000/svg">
+          <rect width="112" height="112" fill="#1a1a1a"/>
+          <rect x="22" y="28" width="68" height="8" rx="4" fill="#00d4aa"/>
+          <rect x="22" y="44" width="48" height="6" rx="3" fill="#555"/>
+          <rect x="22" y="56" width="56" height="6" rx="3" fill="#555"/>
+          <rect x="22" y="68" width="36" height="6" rx="3" fill="#555"/>
+          <rect x="22" y="84" width="68" height="2" rx="1" fill="#2a2a2a"/>
+        </svg>
+      </div>
+      <div>
+        <div class="logo-wordmark">Workpads</div>
+        <div class="logo-sub">babb.tel · KaiOS Demo</div>
+      </div>
+    </div>
+    <div class="header-meta">
+      Interactive prototype <em>·</em> KaiOS 2.5 <em>·</em> 240×320px
+    </div>
+  </header>
+
+  <!-- Left panel -->
+  <aside class="panel-left">
+    <div class="panel-title">Controls</div>
+
+    <div class="dpad-wrap">
+      <div class="dpad">
+        <div class="db up">↑</div>
+        <div class="db lt">←</div>
+        <div class="db ct">·</div>
+        <div class="db rt">→</div>
+        <div class="db dn">↓</div>
+      </div>
+      <div class="dpad-notes">
+        <div class="dpad-note"><strong>↑ ↓</strong> scroll / move fields</div>
+        <div class="dpad-note"><strong>← →</strong> switch tabs</div>
+        <div class="dpad-note"><strong>· Enter</strong> select / open</div>
+        <div class="dpad-note"><strong>↑ twice</strong> top filter bar</div>
+        <div class="dpad-note"><strong>⌫ Backspace</strong> back / cancel</div>
+      </div>
+    </div>
+
+    <div class="key-section">
+      <div class="ks-label">Softkeys</div>
+      <div class="sk-row">
+        <div class="sk-item"><span class="sk-key">A</span><span class="sk-lbl">Left<br>action</span></div>
+        <div class="sk-item"><span class="sk-key hi">S</span><span class="sk-lbl">Centre<br>confirm</span></div>
+        <div class="sk-item"><span class="sk-key">D</span><span class="sk-lbl">Right<br>back</span></div>
+      </div>
+    </div>
+
+    <div class="key-section">
+      <div class="ks-label">Number shortcuts</div>
+      <div class="key-row">
+        <span class="key-desc">Context actions</span>
+        <div class="keys"><span class="key">1</span><span style="color:var(--text-dim);font-size:9px;padding:0 1px">–</span><span class="key">9</span></div>
+      </div>
+      <div class="key-row">
+        <span class="key-desc">Quick note</span>
+        <div class="keys"><span class="key">0</span></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Phone -->
+  <div class="phone-wrap">
+    <div class="phone-outer">
+      <div class="phone-frame">
+        <div class="phone-top">
+          <div class="phone-cam"></div>
+          <div class="phone-speaker"></div>
+        </div>
+        <div class="phone-screen">
+          <iframe
+            id="kios-frame"
+            src="index.html"
+            title="Workpads KaiOS demo"
+            scrolling="no"
+            sandbox="allow-scripts allow-same-origin allow-forms"
+          ></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right panel: live shortcuts -->
+  <aside class="panel-right">
+    <div class="panel-title">Screen shortcuts</div>
+
+    <div class="sc-header">
+      <div class="sc-dot" id="sc-dot"></div>
+      <div class="sc-screen-name" id="sc-screen">loading…</div>
+    </div>
+
+    <ul class="sc-list" id="sc-list">
+      <li class="sc-empty">—</li>
+    </ul>
+
+    <div class="about-block">
+      <p>Track invoices, expenses, liabilities and work activity — entirely with a D-pad and three softkeys. No touchscreen required.</p>
+    </div>
+  </aside>
+
+</div><!-- .stage -->
+
+<script>
+(function () {
+  var frame    = document.getElementById('kios-frame');
+  var scScreen = document.getElementById('sc-screen');
+  var scList   = document.getElementById('sc-list');
+  var scDot    = document.getElementById('sc-dot');
+  var lastScreen = '';
+  var pollTimer  = null;
+
+  /* ── Hide dev overlays ───────────────────────────── */
+  frame.addEventListener('load', function () {
+    try {
+      var s = frame.contentDocument.createElement('style');
+      s.textContent = '#dev-bar,#dev-shortbar{display:none!important}';
+      frame.contentDocument.head.appendChild(s);
+    } catch (e) {}
+    startPolling();
+  });
+
+  /* ── Shortcut polling ────────────────────────────── */
+  function startPolling() {
+    clearTimeout(pollTimer);
+    poll();
+  }
+
+  function poll() {
+    try {
+      var iapp = frame.contentWindow && frame.contentWindow.App;
+      if (iapp) {
+        var screen = iapp.getCurrentScreen ? iapp.getCurrentScreen() : '';
+        if (screen !== lastScreen) {
+          lastScreen = screen;
+          render(screen, iapp.SHORTCUT_MAPS || {});
+        }
+      }
+    } catch (e) { /* cross-origin guard */ }
+    pollTimer = setTimeout(poll, 220);
+  }
+
+  function render(screen, maps) {
+    scScreen.textContent = screen || '—';
+    var list = maps[screen] || [];
+    if (!list.length) {
+      scList.innerHTML = '<li class="sc-empty">No shortcuts on this screen.</li>';
+      return;
+    }
+    scList.innerHTML = list.map(function (s) {
+      return '<li class="sc-item">'
+        + '<span class="sc-key">' + esc(s.key) + '</span>'
+        + '<span class="sc-lbl">' + esc(s.label) + '</span>'
+        + '</li>';
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  /* ── Key forwarding ──────────────────────────────── */
+  var FWD_KEYS = {
+    ArrowUp:1, ArrowDown:1, ArrowLeft:1, ArrowRight:1,
+    Enter:1, Backspace:1, Tab:1,
+    '0':1,'1':1,'2':1,'3':1,'4':1,'5':1,'6':1,'7':1,'8':1,'9':1,
+    a:1, b:1, c:1, d:1, s:1, '*':1
+  };
+
+  document.addEventListener('keydown', function (e) {
+    if (document.activeElement === frame) return;
+    if (!FWD_KEYS[e.key]) return;
+    try {
+      frame.contentWindow.document.dispatchEvent(new KeyboardEvent('keydown', {
+        key: e.key, code: e.code,
+        keyCode: e.keyCode, which: e.which,
+        bubbles: true, cancelable: true,
+        shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey
+      }));
+      e.preventDefault();
+    } catch (err) {}
+  });
+
+  /* re-focus iframe after any outside click */
+  document.addEventListener('click', function (e) {
+    if (!frame.contains(e.target)) frame.focus();
+  });
+})();
+</script>
+</body>
+</html>

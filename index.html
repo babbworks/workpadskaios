@@ -6,6 +6,8 @@
   <title>Workpads</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/workpads-ui.css">
+  <link rel="stylesheet" href="css/workpads-ui-v2.css" id="wp-theme-stylesheet" disabled>
 </head>
 <body>
 
@@ -101,6 +103,19 @@
   </div>
 
   <!-- ── Connections (rel-volume) ───────────────────────────────────────── -->
+  <div id="screen-symbols" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label">Symbols</span>
+      <span class="sc-back" onclick="SymbolsScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div class="content" id="symbols-content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Back</span>
+      <span class="sk-csk">Open</span>
+      <span class="sk-rsk">Save</span>
+    </div>
+  </div>
+
   <div id="screen-connections" class="screen">
     <div class="screen-crumb">
       <span class="sc-label">Connections</span>
@@ -134,7 +149,9 @@
       <span class="sc-label" id="list-crumb-label"></span>
       <span class="sc-back" id="list-crumb-back">&#8249; Back</span>
     </div>
-    <div class="content" id="list-content"></div>
+    <div class="content" id="list-content">
+      <div class="empty-state" id="list-boot-placeholder">Loading records…</div>
+    </div>
     <div class="softkeys">
       <span class="sk-lsk">Info</span>
       <span class="sk-csk">Open</span>
@@ -342,11 +359,12 @@
       <span class="sc-back" onclick="ManagementScreen.onKey('Backspace')">&#8249; Back</span>
     </div>
     <div class="wizard-progress" id="mgmt-tabs">
-      <span class="wizard-tab" data-tab="user">User</span>
+      <span class="wizard-tab" data-tab="user">Settings</span>
       <span class="wizard-tab active" data-tab="records">Records</span>
       <span class="wizard-tab" data-tab="personal">Personal</span>
       <span class="wizard-tab" data-tab="activities">Activities</span>
       <span class="wizard-tab" data-tab="templates">My Templates</span>
+      <span class="wizard-tab" data-tab="present">Notes</span>
     </div>
     <div class="content" id="mgmt-content"></div>
     <div class="softkeys">
@@ -452,6 +470,32 @@
     <div class="softkeys">
       <span class="sk-lsk"></span>
       <span class="sk-csk" id="dispute-csk"></span>
+      <span class="sk-rsk"></span>
+    </div>
+  </div>
+
+  <div id="screen-gatekeeper-receive" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label" id="gatekeeper-receive-crumb-label">Gatekeeper</span>
+      <span class="sc-back" onclick="GatekeeperReceiveScreen.onKey('Backspace')">&#8249; Back</span>
+    </div>
+    <div id="gatekeeper-receive-content" class="content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk">Back</span>
+      <span class="sk-csk" id="gatekeeper-receive-csk">Select</span>
+      <span class="sk-rsk"></span>
+    </div>
+  </div>
+
+  <div id="screen-action-receive" class="screen">
+    <div class="screen-crumb">
+      <span class="sc-label" id="action-receive-crumb-label">Confirm actions</span>
+      <span class="sc-back" id="action-receive-crumb-back">&#8249; Back</span>
+    </div>
+    <div id="action-receive-content" class="content"></div>
+    <div class="softkeys">
+      <span class="sk-lsk"></span>
+      <span class="sk-csk" id="action-receive-csk">Confirm</span>
       <span class="sk-rsk"></span>
     </div>
   </div>
@@ -593,9 +637,13 @@
   <script src="js/lib/CurrencyUtil.js"></script>
   <script src="js/lib/utils.js"></script>
   <script src="js/lib/ui-phase.js"></script>
+  <script src="js/lib/ui-theme.js"></script>
+  <script src="js/lib/ui-v2-shell.js"></script>
   <script src="js/lib/sale-catalogue.js"></script>
   <script src="js/lib/nav-stack.js"></script>
   <script src="js/lib/filter-sheet.js"></script>
+  <script src="js/lib/sale-rollup.js"></script>
+  <script src="js/lib/list-tools-sheet.js"></script>
   <script src="js/lib/lifecycle.js"></script>
   <script src="js/lib/empty-state.js"></script>
   <script src="js/lib/overlay-focus.js"></script>
@@ -611,6 +659,30 @@
   <script src="js/lib/ui-fields.js"></script>
   <script src="js/lib/countries.js"></script>
   <script src="js/lib/fflate.js"></script>
+  <script src="js/lib/domain-profile.js"></script>
+  <script src="js/lib/symbol-table.js"></script>
+  <script src="js/lib/relational-codec.js"></script>
+  <script src="js/lib/programmable-rules.js"></script>
+  <script src="js/lib/programmable-compose.js"></script>
+  <script src="js/lib/template-qr.js"></script>
+  <script src="js/lib/template-receive.js"></script>
+  <script src="js/lib/daily-hub.js"></script>
+  <script src="js/lib/presentation-starters.js"></script>
+  <script src="js/lib/presentation-library.js"></script>
+  <script src="js/lib/programmable-receive.js"></script>
+  <script src="js/lib/binary-qr.js"></script>
+  <script src="js/lib/written-code.js"></script>
+  <script src="js/lib/print-record.js"></script>
+  <script src="js/lib/relational-ui.js"></script>
+  <script src="js/lib/noc-gatekeeper.js"></script>
+  <script src="js/lib/native-groups-table.js"></script>
+  <script src="js/lib/native-v1-split.js"></script>
+  <script src="js/lib/pathc-v2.js"></script>
+  <script src="js/lib/pathc-native.js"></script>
+  <script src="js/lib/nfc-handoff.js"></script>
+  <script src="js/lib/chain-execution.js"></script>
+  <script src="js/lib/glyph-registry.js"></script>
+  <script src="js/lib/glyph-card.js"></script>
   <script src="js/lib/crypto.js"></script>
   <script src="js/lib/security.js"></script>
   <script src="js/lib/codec.js"></script>
@@ -626,6 +698,7 @@
   <script src="js/NoteCodec.js"></script>
   <script src="js/StorageAdapter.js"></script>
   <script src="js/ActivityService.js"></script>
+  <script src="js/lib/activity-taxonomy.js"></script>
   <script src="js/WorkActivityService.js"></script>
   <script src="js/RecordService.js"></script>
   <script src="js/FinancialModel.js"></script>
@@ -644,6 +717,7 @@
   <script src="js/screens/io-create.js"></script>
   <script src="js/screens/io-record.js"></script>
   <script src="js/screens/connections.js"></script>
+  <script src="js/screens/symbols.js"></script>
   <script src="js/screens/list.js"></script>
   <script src="js/screens/wizard.js"></script>
   <script src="js/screens/view.js"></script>
@@ -659,6 +733,8 @@
   <script src="js/screens/finance-overview.js"></script>
   <script src="js/screens/country.js"></script>
   <script src="js/screens/archive.js"></script>
+  <script src="js/screens/action-receive.js"></script>
+  <script src="js/screens/gatekeeper-receive.js"></script>
   <script src="js/screens/chain.js"></script>
   <script src="js/screens/dispute.js"></script>
   <script src="js/panels/workpads-panel-shared.js"></script>
@@ -668,6 +744,7 @@
   <script src="js/panels/WorkpadsPanel.js"></script>
   <script src="js/panels/PersonalPanel.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/boot-safety.js"></script>
   <script src="js/lib/browser-dev.js" data-dev-only="1"></script>
 </body>
 </html>

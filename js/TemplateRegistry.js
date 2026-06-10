@@ -1,5 +1,6 @@
-// TemplateRegistry — manifest store, payload cache, render engine
-// Phase 1: localStorage-backed, schema A/B/P support, built-in default
+// TemplateRegistry — presentation templates (HTML/CSS, Schema A/B/P)
+// Not record presets — those are RecordTemplateService + template-creator.js
+// Manifest: wp_tpl_manifest · payloads: wp_tpl_payload_* · built-in note default
 // Exposes: window.TemplateRegistry
 
 (function(global) {
@@ -285,6 +286,11 @@
 
   // ── Renderer ───────────────────────────────────────────────────────────────
 
+  function escHtml(s) {
+    if (global.esc) return global.esc(s);
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   function render(uri, data) {
     var payload = getPayload(uri);
     markUsed(uri);
@@ -340,7 +346,7 @@
     });
     // Variables {{var}} — HTML-escaped
     html = html.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, function(_, path) {
-      return esc(String(resolvePath(data, path) || ''));
+      return escHtml(String(resolvePath(data, path) || ''));
     });
     return html;
   }
@@ -353,6 +359,77 @@
       cur = cur[parts[i]];
     }
     return cur == null ? '' : cur;
+  }
+
+  // ── Canonical serialisation (T-INTEG — was js/lib/template-registry.js) ───
+  // Stable JSON for fingerprints; omits id, name, meta.content_hash.
+
+  function sortKeys(obj) {
+    if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+    var sorted = {};
+    var keys = Object.keys(obj);
+    keys.sort();
+    for (var i = 0; i < keys.length; i++) {
+      sorted[keys[i]] = sortKeys(obj[keys[i]]);
+    }
+    return sorted;
+  }
+
+  function canonicalSerialise(schema) {
+    var clean = {};
+    var keys = Object.keys(schema);
+    var i, k, m, mk;
+    for (i = 0; i < keys.length; i++) {
+      k = keys[i];
+      if (k === 'id' || k === 'name' || k === 'protected') continue;
+      if (k === 'meta') {
+        m = {};
+        if (schema.meta) {
+          for (mk in schema.meta) {
+            if (schema.meta.hasOwnProperty(mk) && mk !== 'content_hash') {
+              m[mk] = schema.meta[mk];
+            }
+          }
+        }
+        clean.meta = m;
+      } else {
+        clean[k] = schema[k];
+      }
+    }
+    return JSON.stringify(sortKeys(clean));
+  }
+
+  function fingerprintSchema(schema) {
+    if (!global.WPCrypto || !global.WPCrypto.sha256) {
+      throw new Error('TemplateRegistry: WPCrypto required for fingerprintSchema');
+    }
+    var serialised = canonicalSerialise(schema);
+    var bytes = new TextEncoder().encode(serialised);
+    return global.WPCrypto.sha256(bytes);
+  }
+
+  // ── URL install (#t/ plain embed, #te/ encrypted — deferred) ─────────────
+
+  function installFromUrlHash(hash) {
+    if (!global.WPCodec) return { ok: false, error: 'no-codec' };
+    var instr;
+    try {
+      instr = global.WPCodec.decode('workpads.me/p#' + hash);
+    } catch (e) {
+      return { ok: false, error: 'decode-failed', detail: String(e) };
+    }
+    if (!instr || !instr._installTemplate) {
+      return { ok: false, error: 'not-template-url' };
+    }
+    if (instr.encrypted) {
+      return { ok: false, error: 'encrypted-template-deferred' };
+    }
+    var payload = instr._installTemplate;
+    if (payload.length > 8) {
+      var ing = ingestEncoded(payload, 'url');
+      if (ing.ok) return ing;
+    }
+    return { ok: false, error: 'template-ref-only', id: payload };
   }
 
   // ── Encode helper (for template authors / dev tools) ──────────────────────
@@ -382,10 +459,13 @@
     // Render
     render:         render,
     // Utilities
-    encode:         encode,
-    compress:       compress,
-    decompress:     decompress,
-    BUILTIN_URI:    BUILTIN_URI,
+    encode:               encode,
+    compress:             compress,
+    decompress:           decompress,
+    canonicalSerialise:   canonicalSerialise,
+    fingerprintSchema:    fingerprintSchema,
+    installFromUrlHash:   installFromUrlHash,
+    BUILTIN_URI:          BUILTIN_URI,
   };
 
 }(window));

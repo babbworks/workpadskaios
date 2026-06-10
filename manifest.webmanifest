@@ -1,15 +1,29 @@
 {
   "name": "Workpads",
   "short_name": "Workpads",
-  "description": "Personal workpad records for field workers",
+  "description": "Field-worker records, invoices and job sheets — share via URL",
+  "version": "0.2.0",
   "start_url": "/index.html",
+  "launch_path": "/index.html",
   "display": "fullscreen",
   "orientation": "portrait",
   "background_color": "#1a1a1a",
   "theme_color": "#1a1a1a",
-  "icons": [],
+  "icons": [
+    { "src": "img/icon-56.svg",  "sizes": "56x56",   "type": "image/svg+xml" },
+    { "src": "img/icon-112.svg", "sizes": "112x112",  "type": "image/svg+xml" }
+  ],
+  "developer": {
+    "name": "babb.tel",
+    "url": "https://babb.tel"
+  },
   "b2g_features": {
     "type": "web",
-    "permissions": {}
+    "permissions": {
+      "clipboard-read":  { "description": "Read clipboard for receiving shared workpad links" },
+      "clipboard-write": { "description": "Copy shareable workpad links to clipboard" },
+      "nfc":             { "description": "Read Workpads links from NFC tags and peers" },
+      "nfc-share":       { "description": "Send Workpads links via NFC tap (P2P handoff)" }
+    }
   }
 }

@@ -318,19 +318,39 @@
   // ── High-level helpers for codec.js integration ───────────────────────────────
 
   function secureEncode(record, encOpts, secOpts) {
-    var frame = global.WPCodec._buildFrame(record, encOpts || {});
-    if (secOpts.mode === 'partial') return encryptPartial(frame, secOpts.passphrase, secOpts);
-    return encryptFull(frame, secOpts.passphrase, secOpts);
+    encOpts = encOpts || {};
+    var frame = global.WPCodec._buildFrame(record, encOpts);
+    var url;
+    if (secOpts.mode === 'partial') url = encryptPartial(frame, secOpts.passphrase, secOpts);
+    else url = encryptFull(frame, secOpts.passphrase, secOpts);
+    if (global.WPCodec && global.WPCodec.appendRatifiedSuffix) {
+      return global.WPCodec.appendRatifiedSuffix(url, encOpts.ratifiedFrameBytes);
+    }
+    return url;
   }
 
   function secureDecode(url, passphrase, opts) {
     var hash = url.indexOf('#') !== -1 ? url.slice(url.indexOf('#') + 1) : url;
+    var ratifiedB64 = null;
+    if (global.WPCodec && global.WPCodec.parseHashExtras) {
+      var hx = global.WPCodec.parseHashExtras(hash);
+      hash = hx.body;
+      ratifiedB64 = hx.ratifiedB64;
+      if (ratifiedB64) {
+        var hashPos = url.indexOf('#');
+        url = (hashPos !== -1 ? url.slice(0, hashPos + 1) : '') + hash;
+      }
+    }
     var tag  = hash.slice(0, 4);
     var frame;
     if      (tag === '1ps/') frame = decryptFull(url, passphrase, opts || {});
     else if (tag === '1ph/') frame = decryptPartial(url, passphrase);
     else throw new Error('WPSecurity: unsupported tag ' + tag);
-    return global.WPCodec._parseFrame(frame);
+    var result = global.WPCodec._parseFrame(frame);
+    if (ratifiedB64 && global.WPCodec._attachRatifiedFrameRecord) {
+      global.WPCodec._attachRatifiedFrameRecord(result, ratifiedB64);
+    }
+    return result;
   }
 
   global.WPSecurity = {

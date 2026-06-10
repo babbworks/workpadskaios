@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workpads — template QR</title>
+  <link rel="stylesheet" href="css/link-lab.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="hdr">
+      <h1>Template QR</h1>
+      <p>Billboard / form (<code>#1pb/</code>) and template install (<code>#t/</code>). <code>#1dt/</code> decodes like presentation until wire tag ships.</p>
+    </header>
+    <p class="nav"><a href="index.html">Hub</a> · <a href="round-trip.html">Round-trip</a></p>
+
+    <div class="card">
+      <h2>Record JSON</h2>
+      <textarea id="json" rows="10"></textarea>
+      <div class="btn-row" style="margin-top:10px">
+        <button type="button" class="primary" data-mode="billboard">1pb Billboard</button>
+        <button type="button" data-mode="form">1pb Form</button>
+        <button type="button" data-mode="1dt">1dt (draft tag)</button>
+        <button type="button" data-mode="install">#t/ install</button>
+      </div>
+    </div>
+
+    <div id="err"></div>
+    <div id="out"></div>
+  </div>
+
+  <script src="../js/lib/fflate.js"></script>
+  <script src="../js/lib/codec.js"></script>
+  <script src="js/lab-common.js"></script>
+  <script src="js/template-page.js"></script>
+</body>
+</html>

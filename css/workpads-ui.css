@@ -1,0 +1,163 @@
+/* workpads-ui.css — Phase 6 glyph card (KaiOS theme via app.css variables) */
+
+.wp-card {
+  display: flex;
+  gap: 8px;
+  margin: 8px 10px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg2);
+}
+
+.wp-card-glyph {
+  flex-shrink: 0;
+  width: 36px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 10px 4px;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+
+.wp-card-glyph .g-rec {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.wp-card-body { flex: 1; min-width: 0; }
+
+.zh {
+  background: var(--bg);
+  color: var(--text);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.zh .rail {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.zh .t-title {
+  font-size: 13px;
+  font-weight: bold;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zh .t-muted {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.zb {
+  background: var(--bg2);
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.zb .rail {
+  font-size: 11px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zx {
+  background: var(--bg);
+  padding: 4px 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.zx .chain-g {
+  color: var(--accent);
+  margin-right: 4px;
+}
+
+.wp-io {
+  display: flex;
+  gap: 6px;
+  font-size: 10px;
+  padding: 4px 8px 6px;
+  color: var(--text-muted);
+}
+
+.wp-io-in, .wp-io-out { font-weight: bold; color: var(--text); }
+.wp-io-mid { color: var(--accent); }
+
+/* List + chain glyphs */
+.gc-list-glyph,
+.wp-list-glyph {
+  font-size: 12px;
+  margin-right: 6px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.gc-list-glyph.gc-open,
+.wp-list-glyph.wp-open {
+  color: var(--accent);
+}
+
+.wp-l0-mark {
+  font-size: 10px;
+  margin-left: 2px;
+  color: var(--accent);
+  opacity: 0.9;
+}
+
+.gc-spine,
+.wp-spine {
+  position: absolute;
+  left: 4px;
+  top: 48px;
+  bottom: 48px;
+  width: 3px;
+  background: var(--accent);
+  opacity: 0.4;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.gc-share-preview,
+.wp-share-preview {
+  margin: 0 10px 8px;
+}
+
+.gc-share-lbl,
+.wp-share-lbl {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+/* Chain timeline (Phase 6) */
+.chain-row .chain-connector.wp-chain-glyph {
+  font-size: 14px;
+  color: var(--accent);
+  min-width: 14px;
+}
+
+.chain-row .chain-badge-glyph {
+  font-size: 11px;
+  color: var(--accent);
+  margin-right: 4px;
+}
+
+/* Record-type accent borders */
+.wp-rt-need .wp-card-glyph .g-rec { color: #6eb5ff; }
+.wp-rt-offer .wp-card-glyph .g-rec { color: #9ad66e; }
+.wp-rt-connection .wp-card-glyph .g-rec { color: #c9a0ff; }
+.wp-rt-dispute .wp-card-glyph .g-rec,
+.wp-rt-closing .wp-card-glyph .g-rec { color: var(--text-muted); }

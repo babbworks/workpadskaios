@@ -1,4 +1,6 @@
 // agreements.js — Bilateral ratification detection + dispute amendment helpers
+// NOT in index.html until agreements UI ships — see dev_daily/shrink/AGREEMENTS-RESHELL.md
+// Tests: codec-pads-v1.test.js via readFileSync.
 // Spec: AGREEMENTS-DESIGN.md §5, §9
 // Exposes: global.WPAgreements
 

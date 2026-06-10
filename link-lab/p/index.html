@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workpads — record</title>
+  <link rel="stylesheet" href="../css/link-lab.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="hdr">
+      <h1>Workpads record</h1>
+      <p><span class="tag-pill" id="tag">…</span> <span id="tag-label">—</span></p>
+    </header>
+
+    <p class="nav"><a href="../">Lab hub</a> · <a href="../encode.html">Encode</a></p>
+
+    <div class="card">
+      <h2>Paste / decode</h2>
+      <label for="paste">URL or fragment</label>
+      <input type="text" id="paste" placeholder="#1pa/…">
+      <label for="link-base" style="margin-top:10px">Link base (canonical preview)</label>
+      <input type="text" id="link-base" value="https://workpads.me/p">
+      <label for="passphrase" style="margin-top:10px">Passphrase (#1ps/ only)</label>
+      <input type="text" id="passphrase" placeholder="Optional">
+      <div class="btn-row">
+        <button type="button" class="primary" id="btn-decode">Decode</button>
+      </div>
+    </div>
+
+    <div id="status" class="card"></div>
+
+    <div class="card">
+      <h2>Canonical URL</h2>
+      <input type="text" id="canonical" readonly>
+      <div class="btn-row"><button type="button" id="btn-copy">Copy</button></div>
+    </div>
+
+    <div id="body"></div>
+  </div>
+
+  <script src="../../js/lib/fflate.js"></script>
+  <script src="../../js/lib/domain-profile.js"></script>
+  <script src="../../js/lib/symbol-table.js"></script>
+  <script src="../../js/lib/pathc-v2.js"></script>
+  <script src="../../js/lib/crypto.js"></script>
+  <script src="../../js/lib/codec.js"></script>
+  <script src="../../js/lib/security.js"></script>
+  <script src="../js/shell.js"></script>
+</body>
+</html>

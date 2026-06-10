@@ -1,15 +1,8 @@
-// template-registry.js — template store and canonical serialisation
-// Depends on: global.WPCrypto.sha256, global.localStorage
-// Exposes: global.WPTemplateRegistry
-
+// Test-only shim for legacy wp_template_* store (was js/lib/template-registry.js)
 'use strict';
 
-(function(global) {
-
+module.exports = function attachWpTemplateRegistry(global) {
   var STORAGE_PREFIX = 'wp_template_';
-
-  // ── Canonical serialisation ───────────────────────────────────────────────────
-  // Sort all JSON object keys recursively; remove mutable/local fields.
 
   function sortKeys(obj) {
     if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return obj;
@@ -20,7 +13,7 @@
 
   function canonicalSerialise(schema) {
     var clean = {};
-    var keys  = Object.keys(schema);
+    var keys = Object.keys(schema);
     for (var i = 0; i < keys.length; i++) {
       var k = keys[i];
       if (k === 'id' || k === 'name' || k === 'protected') continue;
@@ -37,15 +30,13 @@
 
   function fingerprintSchema(schema) {
     var serialised = canonicalSerialise(schema);
-    var bytes      = new TextEncoder().encode(serialised);
+    var bytes = new TextEncoder().encode(serialised);
     return global.WPCrypto.sha256(bytes);
   }
 
-  // ── Registry ──────────────────────────────────────────────────────────────────
-
   function storeTemplate(id, schema) {
-    var key      = STORAGE_PREFIX + id;
-    var version  = schema.version || 1;
+    var key = STORAGE_PREFIX + id;
+    var version = schema.version || 1;
     var existing = global.localStorage.getItem(key);
     var versioned = existing ? JSON.parse(existing) : {};
     versioned[version] = schema;
@@ -64,8 +55,7 @@
 
   function listTemplates() {
     var ids = [];
-    var len = global.localStorage.length;
-    for (var i = 0; i < len; i++) {
+    for (var i = 0; i < global.localStorage.length; i++) {
       var k = global.localStorage.key(i);
       if (k && k.slice(0, STORAGE_PREFIX.length) === STORAGE_PREFIX) {
         ids.push(k.slice(STORAGE_PREFIX.length));
@@ -75,11 +65,10 @@
   }
 
   global.WPTemplateRegistry = {
-    storeTemplate:      storeTemplate,
-    getTemplate:        getTemplate,
-    listTemplates:      listTemplates,
+    storeTemplate: storeTemplate,
+    getTemplate: getTemplate,
+    listTemplates: listTemplates,
     canonicalSerialise: canonicalSerialise,
-    fingerprintSchema:  fingerprintSchema
+    fingerprintSchema: fingerprintSchema,
   };
-
-}(typeof window !== 'undefined' ? window : global));
+};

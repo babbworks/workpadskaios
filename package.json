@@ -1,11 +1,14 @@
 {
   "name": "workpadskaios",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Workpads mobile app for KaiOS",
   "private": true,
   "scripts": {
     "start": "npx serve . -p 3000 --no-clipboard",
-    "test":  "node test/flow.test.js"
+    "link-lab": "npx serve . -p 8765 --no-clipboard",
+    "sync:ui-v2": "node scripts/sync-ui-v2-css.js",
+    "test":  "node test/ui-theme.test.js && node test/flow.test.js && node test/pathc-v2.test.js && node test/native-groups-table.test.js && node test/native-v1-split.test.js && node test/programmable-rules.test.js && node test/programmable-compose.test.js && node test/programmable-receive.test.js && node test/binary-qr.test.js && node test/written-code.test.js && node test/print-record.test.js && node test/template-qr.test.js && node test/template-receive.test.js && node test/presentation-library.test.js && node test/symbol-table-ui.test.js && node test/noc-gatekeeper.test.js && node test/glyph-registry.test.js && node test/social-ledger.test.js && node test/rel-volume.test.js && node test/activity-taxonomy.test.js && node test/daily-hub.test.js && node test/compression-metrics.test.js && node test/nfc-handoff.test.js && node test/codec-pads-v1.test.js && node test/integration-smoke.test.js && node test/record-service-cache.test.js && node test/finance-overview-aggregate.test.js",
+    "pack":  "node scripts/pack.js"
   },
   "dependencies": {
     "@workpads/codec": "file:../workpads-codec"

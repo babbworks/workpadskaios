@@ -1,4 +1,5 @@
 // roles.js — ROLE-CODEBOOK v1.1 lookup tables for pads-v1 participants block
+// NOT in index.html (audit Wave 1). Tests: codec-pads-v1.test.js via readFileSync.
 // Wire format: role_code byte = (ROLE_SLOT << 3) | ROLE_SIGNALS
 //   ROLE_SLOT 0-30: compressed common-role codebook (§1.3)
 //   ROLE_SLOT 31: extended — read next byte (§2/§3)
@@ -57,11 +58,40 @@
     return { roleSlot: (byte >> 3) & 0x1F, roleSignals: byte & 0x7 };
   }
 
+  // pads-v1 participant roleType quick-select (bits 0–1 of role byte)
+  var QUICK_ROLE_TYPES = ['Customer', 'Worker', 'Supplier', 'Other'];
+
+  function quickRoleLabel(roleType, roleText) {
+    var rt = roleType != null ? roleType : 0;
+    if (rt === 3 && roleText) return String(roleText);
+    return QUICK_ROLE_TYPES[rt] || QUICK_ROLE_TYPES[0];
+  }
+
+  function quickRoleOptions() {
+    return [
+      { val: 0, label: QUICK_ROLE_TYPES[0] },
+      { val: 1, label: QUICK_ROLE_TYPES[1] },
+      { val: 2, label: QUICK_ROLE_TYPES[2] },
+      { val: 3, label: QUICK_ROLE_TYPES[3] },
+    ];
+  }
+
+  // Extended role labels (template-creator participant roleType index)
+  var EXTENDED_ROLE_LABELS = [
+    'Witness', 'Guarantor', 'Signatory', 'Observer', 'Approver',
+    'Beneficiary', 'Agent', 'Referee', 'Representative', 'Director',
+    'Shareholder', 'Auditor', 'Solicitor', 'Accountant', 'Trustee', 'Custom',
+  ];
+
   global.WPRoles = {
-    COMMON_ROLES:      COMMON_ROLES,
-    roleName:          roleName,
-    roleCodeByte:      roleCodeByte,
-    decodeRoleCodeByte: decodeRoleCodeByte
+    COMMON_ROLES:         COMMON_ROLES,
+    QUICK_ROLE_TYPES:     QUICK_ROLE_TYPES,
+    EXTENDED_ROLE_LABELS: EXTENDED_ROLE_LABELS,
+    roleName:             roleName,
+    roleCodeByte:         roleCodeByte,
+    decodeRoleCodeByte:   decodeRoleCodeByte,
+    quickRoleLabel:       quickRoleLabel,
+    quickRoleOptions:     quickRoleOptions,
   };
 
 }(typeof window !== 'undefined' ? window : global));

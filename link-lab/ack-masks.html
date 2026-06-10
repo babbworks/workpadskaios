@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workpads — ack masks</title>
+  <link rel="stylesheet" href="css/link-lab.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="hdr">
+      <h1>Ack masks</h1>
+      <p>Encode ack from toggles → paste → verify 16-bit masks (CE-07).</p>
+    </header>
+    <p class="nav"><a href="index.html">Hub</a> · <a href="round-trip.html">Round-trip</a></p>
+
+    <div class="card">
+      <h2>Step 1 — Build ack</h2>
+      <div id="toggles"></div>
+      <div class="btn-row">
+        <button type="button" class="primary" id="btn-encode">Encode #1pv ack</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Step 2 — Paste & verify</h2>
+      <label for="paste">Fragment from step 1</label>
+      <input type="text" id="paste" placeholder="#1pv/…">
+      <div class="btn-row">
+        <button type="button" id="btn-verify">Verify decode</button>
+      </div>
+    </div>
+
+    <div id="status"></div>
+    <div id="out"></div>
+  </div>
+
+  <script src="../js/lib/fflate.js"></script>
+  <script src="../js/lib/pathc-v2.js"></script>
+  <script src="../js/lib/codec.js"></script>
+  <script src="../js/lib/chain-execution.js"></script>
+  <script src="js/lab-common.js"></script>
+  <script src="js/ack-masks-page.js"></script>
+</body>
+</html>

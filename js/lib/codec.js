@@ -16,6 +16,7 @@
 
   var URL_PREFIX = 'workpads.me/p#';
   var CODEBOOK   = '1pa';
+  var CODEBOOK_V2 = '1pv';
 
   // ── base64url ──────────────────────────────────────────────────────────────────
 
@@ -769,6 +770,13 @@
       }
     }
 
+    if (opts.programmableRules && global.WPProgrammableRules) {
+      var prb = global.WPProgrammableRules.encodeBlock(opts.programmableRules);
+      if (prb && prb.length) {
+        for (var pri = 0; pri < prb.length; pri++) out.push(prb[pri]);
+      }
+    }
+
     return new Uint8Array(out);
   }
 
@@ -1201,6 +1209,14 @@
       }
     }
 
+    if (global.WPProgrammableRules && pos < bytes.length &&
+        bytes[pos] === global.WPProgrammableRules.TAG) {
+      var prDec = global.WPProgrammableRules.decodeBlock(bytes, pos);
+      record.programmable_rules = prDec.rules;
+      record._programmablePlain = global.WPProgrammableRules.describeAll(prDec.rules);
+      pos = prDec.next;
+    }
+
     return record;
   }
 
@@ -1476,14 +1492,85 @@
     return units + '.' + (cents < 10 ? '0' : '') + cents;
   }
 
+  // ── URL suffix params (&c= chain ref, &r= ratified frame) ───────────────────
+
+  function parseHashExtras(hash) {
+    var amp = hash.indexOf('&');
+    if (amp === -1) return { body: hash, chainRef: null, ratifiedB64: null };
+    var body = hash.slice(0, amp);
+    var chainRef = null;
+    var ratifiedB64 = null;
+    var segs = hash.slice(amp + 1).split('&');
+    var si;
+    for (si = 0; si < segs.length; si++) {
+      if (segs[si].indexOf('c=') === 0) chainRef = segs[si].slice(2);
+      else if (segs[si].indexOf('r=') === 0) ratifiedB64 = segs[si].slice(2);
+    }
+    return { body: body, chainRef: chainRef, ratifiedB64: ratifiedB64 };
+  }
+
+  function appendRatifiedSuffix(url, ratifiedFrameBytes) {
+    if (!ratifiedFrameBytes || !ratifiedFrameBytes.length) return url;
+    var rDef = global.fflate.deflateSync(ratifiedFrameBytes, { level: 9 });
+    return url + '&r=' + toBase64Url(rDef);
+  }
+
+  function attachRatifiedFrameRecord(result, ratifiedB64) {
+    if (!ratifiedB64) return;
+    var rf = global.fflate.inflateSync(fromBase64Url(ratifiedB64));
+    result._ratifiedFrameRecord = parseFrame(rf);
+  }
+
   // ── public encode ──────────────────────────────────────────────────────────────
 
+  function encodeV2(record, opts) {
+    if (!global.WPPathC) throw new Error('WPCodec: WPPathC not loaded — include pathc-v2.js before codec.js');
+    opts = opts || {};
+    if (opts.programmableRules == null && record && record.programmable_rules) {
+      opts.programmableRules = record.programmable_rules;
+    }
+    var v1Frame = buildFrame(record, opts);
+    var useBridge = opts.bridgeV1 === true;
+    var inner = (useBridge || !global.WPPathCNative)
+      ? global.WPPathC.wrapV1Frame(v1Frame, record, opts)
+      : global.WPPathCNative.wrapNative(v1Frame, record, opts);
+    var compressed = global.fflate.deflateSync(inner, { level: 9 });
+    var url = URL_PREFIX + CODEBOOK_V2 + '/' + toBase64Url(compressed);
+    if (opts.chain && opts.chainRef) {
+      var cr = opts.chainRef;
+      url += '&c=' + (typeof cr === 'string' ? cr : toBase64Url(new Uint8Array(cr)));
+    }
+    return appendRatifiedSuffix(url, opts.ratifiedFrameBytes);
+  }
+
+  function decodeV2(hash) {
+    if (!global.WPPathC) throw new Error('WPCodec: WPPathC not loaded');
+    var extras = parseHashExtras(hash);
+    var inflated = global.fflate.inflateSync(fromBase64Url(extras.body.slice(4)));
+    var unwrapped = (global.WPPathCNative && global.WPPathCNative.unwrapNative)
+      ? global.WPPathCNative.unwrapNative(inflated)
+      : global.WPPathC.unwrapToV1Frame(inflated);
+    var result = parseFrame(unwrapped.v1Frame, null);
+    global.WPPathC.attachMetaToRecord(result, unwrapped.meta, unwrapped.bridge);
+    if (unwrapped.native) result._nativeGroups = true;
+    if (unwrapped.groupLocalPrefix && unwrapped.decodedGroupLocal) {
+      result._decodedGroupLocal = unwrapped.decodedGroupLocal;
+    }
+    if (extras.chainRef) result._chainRef = extras.chainRef;
+    attachRatifiedFrameRecord(result, extras.ratifiedB64);
+    return result;
+  }
+
   function encode(record, opts) {
+    opts = opts || {};
+    if (opts.schemeTag === CODEBOOK_V2 || opts.codebook === CODEBOOK_V2 || opts.padsV2) {
+      return encodeV2(record, opts);
+    }
     var frame      = buildFrame(record, opts);
     var compressed = global.fflate.deflateSync(frame, { level: 9 });
-    var tag = (opts && opts.presentationTag) ? opts.presentationTag : CODEBOOK;
+    var tag = opts.presentationTag ? opts.presentationTag : CODEBOOK;
     var url = URL_PREFIX + tag + '/' + toBase64Url(compressed);
-    if (opts && opts.chain && opts.chainRef) {
+    if (opts.chain && opts.chainRef) {
       var cr = opts.chainRef;
       if (typeof cr === 'string') {
         url += '&c=' + cr;
@@ -1491,7 +1578,7 @@
         url += '&c=' + toBase64Url(new Uint8Array(cr));
       }
     }
-    return url;
+    return appendRatifiedSuffix(url, opts.ratifiedFrameBytes);
   }
 
   // ── public decode ──────────────────────────────────────────────────────────────
@@ -1506,18 +1593,21 @@
     // Marker UID lookup (#1pm/<b64url(marker_uid_string)>)
     if (hash.slice(0, 4) === '1pm/') return { _markerUid: fromUtf8(fromBase64Url(hash.slice(4))) };
 
-    // pads-v1 plain (#1pa/) and presentation (#1pb/, #1pf/)
-    if (hash.slice(0, 4) === '1pa/' || hash.slice(0, 4) === '1pb/' || hash.slice(0, 4) === '1pf/') {
+    // pads-v2 Path C bridge (#1pv/)
+    if (hash.slice(0, 4) === '1pv/') {
+      return decodeV2(hash);
+    }
+
+    // pads-v1 plain (#1pa/) and presentation (#1pb/, #1pf/, #1dt/ draft template QR)
+    if (hash.slice(0, 4) === '1pa/' || hash.slice(0, 4) === '1pb/' || hash.slice(0, 4) === '1pf/' ||
+        hash.slice(0, 4) === '1dt/') {
       var isPresentation = (hash.slice(0, 4) !== '1pa/');
-      var chainRef = null;
-      var cIdx = hash.indexOf('&c=');
-      if (cIdx !== -1) {
-        chainRef = hash.slice(cIdx + 3);
-        hash = hash.slice(0, cIdx);
-      }
-      var frame  = global.fflate.inflateSync(fromBase64Url(hash.slice(4)));
+      var extras = parseHashExtras(hash);
+      var frame  = global.fflate.inflateSync(fromBase64Url(extras.body.slice(4)));
       var result = parseFrame(frame, isPresentation ? { presentation: true } : null);
-      if (chainRef) result._chainRef = chainRef;
+      if (hash.slice(0, 4) === '1dt/') result._templateQr = true;
+      if (extras.chainRef) result._chainRef = extras.chainRef;
+      attachRatifiedFrameRecord(result, extras.ratifiedB64);
       return result;
     }
 
@@ -1629,7 +1719,10 @@
   global.WPCodec = {
     encode:   encode,
     decode:   decode,
+    encodeV2: encodeV2,
+    decodeV2: decodeV2,
     validate: validate,
+    CODEBOOK_V2: CODEBOOK_V2,
     parseAttachmentField:  parseAttachmentField,
     formatAttachmentField: formatAttachmentField,
     parseProjectTags:      parseProjectTags,
@@ -1640,7 +1733,10 @@
     _dateToDays:             dateToDays,
     _daysToDate:             daysToDate,
     _timeToMins:             timeToMinutes,
-    _minsToTime:             minutesToTime
+    _minsToTime:             minutesToTime,
+    parseHashExtras:              parseHashExtras,
+    appendRatifiedSuffix:         appendRatifiedSuffix,
+    _attachRatifiedFrameRecord:   attachRatifiedFrameRecord
   };
 
 }(window));

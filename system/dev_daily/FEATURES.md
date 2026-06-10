@@ -1,8 +1,8 @@
 # Feature Status Register
 
 **Purpose:** Track every named feature by its current status — Active (live in UI), Latent (designed and specced but not activated), Pending (decided, not yet designed/built), Backlog (ideas not yet decided).  
-**Cross-reference:** OPEN-QUESTIONS.md (unresolved design), BLOCK-DECISIONS.md (codec decisions), FRAME-SPEC.md (wire layout)  
-**As of:** 2026-05-16
+**Cross-reference:** [`DEVELOPMENT-PLAN.md`](DEVELOPMENT-PLAN.md) (phase audit), [`dev_refs/JS-RUNTIME-MAP.md`](../dev_refs/JS-RUNTIME-MAP.md) (file ↔ runtime), [`OPEN-QUESTIONS.md`](OPEN-QUESTIONS.md), [`dev_refs/FRAME-SPEC.md`](../dev_refs/FRAME-SPEC.md)  
+**As of:** 2026-05-21 (js/ folder audit)
 
 ---
 
@@ -10,12 +10,83 @@
 
 | Status | Meaning |
 |--------|---------|
-| **Active** | Feature is live and visible in the UI |
-| **Latent** | Fully designed and specced; code may exist; intentionally not activated in UI yet |
-| **Pending** | Decision made, design complete or in progress; not yet built |
-| **Backlog** | Idea captured; no design decision yet |
+| **Active** | Live in the KaiOS app shell (`index.html` scripts) |
+| **Active (codec)** | Encode/decode in `js/lib/codec.js`; may lack full UI |
+| **Active (lib)** | Loaded in `index.html`; UI may still be partial — see JS-RUNTIME-MAP |
+| **Partial** | Subset shipped; spec remainder pending |
+| **Latent** | Designed/specced; minimal or no UI |
+| **Pending** | Not implemented in app |
+| **Backlog** | Idea only |
 
 Each entry: name, one-line description, relevant OQ/decision refs, notes.
+
+---
+
+## KaiOS application (v0.2.0)
+
+*Shipped UI and services — audit 2026-05-21. Screens match `app.js` `SCREENS`.*
+
+### Core PADS workflow
+**Status: Active**  
+List, wizard (PADS + financial step), view (options, financial card, chain, ACK, state commit, amendment, dispute), share (`1pa`/`1pb`/`1ps`), management (records/personal/settings/templates), archive, onboarding, country/locale.
+
+### Panels and capture
+**Status: Active**  
+WorkpadsPanel (browse/record/wizard modes, COGS tiers), PersonalPanel, quick note overlay.
+
+### Financial
+**Status: Active**  
+`financial.js` (per-record), `finance-overview.js` (portfolio; All/Month/Week), `ledger.js`, `liabilities.js`, list summary bar → finance overview.
+
+### Chain and agreements (app layer)
+**Status: Active**  
+`chain.js`, state_commit + ACK + amendment/dispute in `view.js`. Ratified frame: `view.js` stamps `_ratifiedFrame`; share emits `&r=` suffix via `RecordService.encodeUrl` + `WPCodec`.
+
+### My Templates and NewEnt
+**Status: Active (partial library)**  
+**My Templates:** `RecordTemplateService` — **Personal** (created on device), **Imported** (`importedAt`), **awaiting import** (`receivedAt` only; review list from Imported tab). Management **My Templates** tab; list picker Personal / Imported.  
+**Presentation templates:** `TemplateRegistry.js` (notes, `#t/` — not My Templates).  
+External template URL → `receiveExternal()`: **Pending** wire. Bundled presentation library: **Pending** (Phase K).
+
+### Extended surfaces (beyond original v0.1)
+**Status: Active**  
+`home`, `help`, `user-switcher`, `timeline`, `tasks`, `calendar-wp`, `note-share`.
+
+### List dashboard (time windows)
+**Status: Partial**  
+Summary bar on `list.js`; full 14-window `wp_dash_window` spec not implemented (Phase J).
+
+### Store packaging
+**Status: Partial**  
+Manifest v0.2, SVG icons, clipboard permissions. PNG store icons + device verification: **Pending** (Phase L).
+
+### Work activities (record grouping)
+**Status: Active**  
+`WorkActivityService.js`; filter on `list.js` and `WorkpadsPanel.js`; `activityId` on records in `wizard.js`.
+
+### User / activity profile switcher
+**Status: Active**  
+`user-switcher.js` — multiple `ActivityService` profiles.
+
+### Contact browser (list)
+**Status: Active**  
+`list.js` contact sub-screen — categories, search, new contact.
+
+### Ledger and liabilities (per contact)
+**Status: Active**  
+`ledger.js`, `liabilities.js` from contact panel quick actions.
+
+### Focus mode (list)
+**Status: Active**  
+`list.js` — `wp_focus_mode` hides chain derivative types in main list.
+
+### Protocol libs (shell)
+**Status: Active (lib)**  
+`anon.js`, `trig.js`, `ctrig.js`, `markers.js` — in shell after `codec.js`. **Deferred off shell:** `agreements.js`, `roles.js`, `formula.js`, `template-registry.js`. Anon share via `WPAnon`. C-TRIG: `ctrigProgram` on record + `runCtrigSchedule` after save. TRIG: `applyTrigPresentation` on decode.
+
+### Implementation gaps (codec/UI, not separate features)
+**Status: Pending**  
+[`IMPLEMENTATION.md`](../../IMPLEMENTATION.md) for remaining agreement UI. **`changedMask` at share:** done in `RecordService.encodeUrl` (`_originalSnap` diff).
 
 ---
 
@@ -68,8 +139,8 @@ Header bytes (meta1, meta2, setup_byte, transaction_byte) left unencrypted; fiel
 ---
 
 ### Full encryption (`1ps` tag)
-**Status: Pending**  
-Full frame encrypted. Used for cost records, internal pay data, colleague-facing records. App share sheet enforces automatically when `RECIPIENT_TYPE=1` or `EXPENSE_CATEGORY=01/10`.  
+**Status: Active (share path)** / **Pending (auto-enforce rules)**  
+Share screen supports `#1ps/` with passphrase (`share.js`, `RecordService.encodeUrl`). Automatic enforce by recipient/expense category: **Pending**.  
 **Ref:** OQ-14
 
 ---
@@ -100,51 +171,52 @@ A pre-authored decoy record appended inside the encrypted payload. Brute-force a
 ## Records & Codec
 
 ### pads-v1 codec (`1pa` tag)
-**Status: Pending**  
-Full encoder/decoder for the pads-v1 wire format. Replaces current 1eg/ codec entirely (app not yet publicly released — no migration needed).  
-**Ref:** FRAME-SPEC.md, D1–D37
+**Status: Active**  
+`js/lib/codec.js` encode `#1pa/`; legacy decode; 646 tests in `codec-pads-v1.test.js`; npm interop via `flow.test.js`.  
+**Ref:** FRAME-SPEC.md, `project-process.md` §7
 
 ---
 
 ### Compound records (multi-line)
-**Status: Pending**  
-COMPOUND_VALUE=1 in sf_byte; compound header + per-line entries with optional line_flags byte (LINE_TYPE, TAX_MODE, QTY_LINE).  
+**Status: Active (codec)** / **Partial (UI)**  
+Encoder/decoder in `codec.js`; wizard/financial UI coverage varies by record type.  
 **Ref:** FRAME-SPEC.md §8, D25
 
 ---
 
 ### Amendment records (`BASE_TEMPLATE=110`)
-**Status: Pending**  
-Correction records carrying only changed fields via changed_fields_mask overlay. CHAIN links to parent. line_index for compound line corrections.  
-**Ref:** FRAME-SPEC.md §10, D28
+**Status: Active**  
+Amendment clone from `view.js`; `RecordService.encodeUrl` diffs `_originalSnap` and encodes BASE_TEMPLATE=6 with sparse fields + `parentUid`.  
+**Ref:** FRAME-SPEC.md §10, IMPLEMENTATION.md
 
 ---
 
 ### State Commit records (`BASE_TEMPLATE=101`)
-**Status: Pending**  
-Snapshot records (job close, pay period close, period summary, annual aggregate). No transaction byte.  
-**Ref:** FRAME-SPEC.md §9, D27
+**Status: Active**  
+`view.js` confirmCommit; `markers.buildRatifiedFrame`; stored on record; outbound `&r=` on share when present.  
+**Ref:** FRAME-SPEC.md §9
 
 ---
 
 ### COMPACT_TIME date encoding
-**Status: Pending**  
-Dates as uint16 days since 2000-01-01; times as uint16 minutes since midnight. Saves ~10 bytes per record with a date vs ISO string.  
+**Status: Active**  
+Wire encoding in pads-v1 codec; round-trip tests pass.  
 **Ref:** OQ-2 (resolved)
 
 ---
 
 ### DOMAIN=11 hybrid mode
-**Status: Pending — active design**  
-A record carrying both I>O worker-facing classification and BitLedger Account Pair simultaneously. Design session scheduled.  
-**Ref:** OQ-7
+**Status: Active (codec + RecordService)** / **Latent (full UI)**  
+`encodeUrl` passes domain/IO direction; not all wizard entry types expose full DOMAIN=11 UX.  
+**Ref:** OQ-7, FRAME-SPEC §17
 
 ---
 
 ## Templates & Presentation
 
 ### TRIG — display trigger bytecode
-**Status: Pending — spec complete, awaiting `1pb`/`1pf` shell implementation**  
+**Status: Active**  
+`share.js` encodes `trigCode`; `decodeUrl` runs `WPTrig.evaluate` → `trigDisplay` on record; `view.js` banner; `#1pb/` form TRIG mode routes to wizard.  
 A 1–20 byte bytecode language embedded in the TRIG block of `1pb` and `1pf` frames. Programs the receptive shell's rendering behaviour: who sees what, in which display mode, with which CSS/theme/JS module loaded. Bots and scrapers see a blank page; qualifying viewers see the full card, form, or menu.
 
 **Architecture:** Stack machine (Forth/PostScript model). Nibble-encoded opcodes (high nibble = op, low nibble = inline immediate). Two modes: 1-byte pattern token (12 pre-compiled common programs) or 2–20 byte full bytecode with header byte.
@@ -194,21 +266,24 @@ Presentation wrapper for financial records — customer invoice views, statement
 ---
 
 ### Public billboard records (`1pb` tag)
-**Status: Pending**  
-Display schema block + optional form schema block. Micro-billboard use case: business card, service menu, contact form.  
+**Status: Active (share tag + UI sections)** / **Pending (receiver shell)**  
+Share sheet tag `1pb`, presentation/TRIG/routing sections; receive path evaluates TRIG and shows presentation banner (full billboard renderer still minimal).  
 **Ref:** OQ-20–OQ-25, FRAME-SPEC.md §11
 
 ---
 
-### Template system (`1pt`, `#t/`, `#te/`)
-**Status: Pending**  
-Template definition schema, protected template immutability, content-addressed storage, template sharing via fragment URL.  
-**Ref:** OQ-15, OQ-17, OQ-18, OQ-19
+### Presentation templates (`1pt`, `#t/`, `#te/`) — not record presets
+**Status: Partial**  
+**Active:** `TemplateRegistry.js` (`ingest`, `installFromUrlHash`, fingerprints); `note-share.js`; `#t/` URL receive.  
+**Record presets (separate):** `template-creator.js`, `RecordTemplateService`, Management Presets tab, list pinned types.  
+**Pending:** `#te/` decrypt; bundled presentation library; CSV paste for presentation templates.  
+**Ref:** OQ-15–OQ-19, Phase K; naming: [`JS-RUNTIME-MAP.md`](../dev_refs/JS-RUNTIME-MAP.md) § Two template systems
 
 ---
 
 ### Anonymous / stealth presentation mode (data_source=11)
-**Status: Pending**  
+**Status: Active (codec)** / **Partial (UI)**  
+`codec.js` anon encode paths; `share.js` data source selector includes anon. `js/lib/anon.js` not in shell. Receiver shell: **Pending**.  
 A deliberate identity-suppression mode for `#1pb/` records. No sender identity in payload, no reply routing address, no traceable submission destination. Shell shows placeholder text only ("Contact" or TRIG-configured string). Contact forms use `SUBMIT_ACTION=11` (anonymous pickup) — submissions held server-side for retrieval via a blind pickup code the sender controls out-of-band.
 
 **Properties:**
@@ -275,53 +350,67 @@ Constrained JS in `1ps`/`1pt`/`1pf` tagged records. Two delivery modes: inline (
 ## Contacts & Identity
 
 ### alt_id for no-phone users
-**Status: Pending**  
-Participants block extension: app_uid, trade_name, national_id, location_label as alternative identifiers. Needed for African market launch.  
-**Ref:** OQ-31, FRAME-SPEC.md §13  
-**Blocker:** part_flags bit conflict needs resolution (OQ-31).
+**Status: Partial**  
+Contact records support extended fields (`alt_phone`, `website`, `social_handle`, …) in `wizard.js` / `RecordService.encodeUrl`. Spec **app_uid / national_id / location_label** on participants wire (OQ-31): **Pending**.  
+**Ref:** OQ-31, FRAME-SPEC.md §13
 
 ---
 
 ### Contact multi-role model
-**Status: Pending**  
-Same contact can be Customer/Worker/Supplier/Subcontractor — role is per-record (participants block ROLE_TYPE), not a contact property. Contact dashboard aggregates by role.  
-**Ref:** D36
+**Status: Active**  
+Implemented in three layers (see `wizard.js`, `WorkpadsPanel.js`, `list.js`):
+
+1. **Contact records** (`record_class: 'contact'`): multi-select **role chips** on Identity screen (`roles[]` — Customer, Worker, Vendor, Sub-contractor, Contractor, …).
+2. **Job records**: **participants** block with per-line role (Customer / Worker / Supplier / Other) and optional custom `role_text`; contact picker from `BlockRegistry`.
+3. **Contact dashboard**: `WorkpadsPanel.renderContactPanel` — role filter bar, lists related jobs/expenses filtered by participant role or `linkedContactId`.
+
+Note: FEATURES spec text said “role is per-record only” — the app **also** stores roles on the contact record itself for tagging; job-level participants remain per-record.  
+**Ref:** D36, JS-RUNTIME-MAP § Contact multi-role
 
 ---
 
 ### Two-tier contact ID (global + activity alias)
-**Status: Pending**  
-App-global sequential ID (001, 002...) plus optional activity-level alias (AH-2023). Both app-side only; alias travels in `ref_number` field on customer-facing records.  
+**Status: Partial**  
+- **Activity alias:** `ref_number` on records in wizard (can hold activity-scoped reference).  
+- **Stable link:** `linkedContactId` on child records / ledger / liabilities / contact panel matching.  
+- **Global sequential ID (001, 002…):** not implemented in `BlockRegistry` (keys are normalized name strings).  
 **Ref:** D35
+
+---
+
+### BlockRegistry (contacts store)
+**Status: Active**  
+`BlockRegistry.js` — name + phone; auto-save from wizard; lookup for customer phone fill; participant picker.
 
 ---
 
 ## Activity & Services
 
 ### Activity home screen navigation
-**Status: Pending**  
-Activity filter on home screen (not just sidebar). Activity selector as primary navigation element.  
-**Ref:** CODEC-STATUS.md Round 13
+**Status: Partial**  
+- **Active:** `home.js` WP+ launcher (work/pads → filtered `list.js`); `WorkActivityService` + activity filter on list and WorkpadsPanel; inline activity picker on list.  
+- **Pending:** Activity selector as **primary** home navigation per Round 13 spec (sidebar-only today).  
+**Ref:** `home.js`, `WorkActivityService.js`, `list.js`
 
 ---
 
 ### Service catalog with cost lines
-**Status: Pending**  
-Services have name, unit, price, tax_default, category, costs[] with qty_link logic, defaultWorkers[].  
+**Status: Partial**  
+`NewEntTemplate.js` + `newent-wizard.js` — business framework sections, not full SIMBA service catalog (name, unit, price, `costs[]`, `defaultWorkers[]`).  
 **Ref:** CODEC-STATUS.md Rounds 14–16
 
 ---
 
 ### Multi-worker rate table
 **Status: Pending**  
-3-level rate resolution: per-worker×service → per-worker activity default → per-role fallback. App-side only.  
+3-level rate resolution not in app.  
 **Ref:** CODEC-STATUS.md Round 17
 
 ---
 
 ### Pay config inheritance
 **Status: Pending**  
-Global pay config → activity overrides → per-worker. Off by default; Pay settings accessed post-activity-setup.  
+Global → activity → per-worker pay config not in app.  
 **Ref:** CODEC-STATUS.md Round 19–20
 
 ---

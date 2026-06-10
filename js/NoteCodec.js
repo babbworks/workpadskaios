@@ -1,6 +1,6 @@
 // NoteCodec — encode/decode personal notes as shareable URLs
 // Format: workpads.me/n#n1/{fflate-deflated base64url JSON}
-// Depends on: TemplateRegistry (compress/decompress)
+// Depends on: TemplateRegistry (presentation templates — compress/decompress)
 // Exposes: window.NoteCodec
 
 (function(global) {

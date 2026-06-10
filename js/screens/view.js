@@ -23,6 +23,8 @@
   var progressionPickerIdx  = 0;
   var progressionPickerItems = [];
   var progConfirmOpen       = false;
+  var _viewScrollId         = null;
+  var optionsScrollReset    = true;
   var progConfirmTarget     = null; // { type, label } of chosen progression
   var progConfirmBtnIdx     = 0;
 
@@ -135,19 +137,38 @@
     return LABELS[id] || id;
   }
 
+  function doCreateOfferFromConnection() {
+    if (!currentRecord) return;
+    var src = currentRecord;
+    var label = src.relay_to || src.customer || src.job || 'connection';
+    RecordService.create({
+      record_type: 'offer',
+      job: 'Offer: ' + label,
+      customer: src.customer || src.relay_to || '',
+      chainRef: src.chainRef || null,
+      linkedContactId: src.linkedContactId || src.id || null,
+      relationship: 'responds',
+      date: new Date().toISOString().slice(0, 10),
+      draft: true,
+    }).then(function(offerRec) {
+      App.showWizard(offerRec);
+    });
+  }
+
   function doConfirmConnection() {
     if (!currentRecord || !currentRecord.id) return;
     RecordService.save(currentRecord.id, { connection_ack: 'confirmed' }).then(function(updated) {
       if (global.SocialLedger) {
-        SocialLedger.logReferral({
+        SocialLedger.logEvent('relay_confirmed', {
           ackType: 'relay_confirmed',
-          ackRequired: false,
           connectionId: currentRecord.id,
+          contactId: currentRecord.linkedContactId || null,
           confirmed: true,
         });
+        SocialLedger.resolvePendingForConnection(currentRecord.id);
       }
       if (updated) App.showView(updated);
-      else renderRecord(currentRecord);
+      else render(currentRecord);
     });
   }
 
@@ -265,9 +286,33 @@
     updateViewCsk();
   }
 
+  function scheduleViewScrollRestore(rec, scrollTop, collapse) {
+    function apply() {
+      if (currentRecord !== rec || !el.content) return;
+      el.content.scrollTop = scrollTop;
+      if (collapse > 0) {
+        collapseState = collapse;
+        el.content.classList.toggle('view-collapsed', collapseState === 1);
+        el.content.classList.toggle('view-sec-collapsed', collapseState === 2);
+        el.content.classList.toggle('view-minimal', collapseState === 3);
+        var togBtn = document.getElementById('view-toggle-btn');
+        if (togBtn) {
+          togBtn.className = 'view-tb-toggle' +
+            (collapseState === 1 ? ' collapsed' : collapseState === 2 ? ' collapsed-2' : collapseState === 3 ? ' collapsed-3' : '');
+        }
+        updateCollapsedFocus();
+      }
+      updateViewCsk();
+    }
+    apply();
+    setTimeout(apply, 0);
+    setTimeout(apply, 80);
+    setTimeout(apply, 150);
+  }
+
   // ── View toolbar (sections dropdown + search + 3-state collapse) ─────────
 
-  function populateViewToolbar(rec) {
+  function populateViewToolbar(rec, preserveNav, savedCollapse) {
     var sel    = document.getElementById('view-sec-sel');
     var inp    = document.getElementById('view-search');
     var togBtn = document.getElementById('view-toggle-btn');
@@ -290,10 +335,18 @@
     };
 
     // ── 4-state collapse toggle ────────────────────────────────────────────
-    collapseState = 0;
-    collapsedFocusIdx = 0;
-    el.content.classList.remove('view-collapsed', 'view-sec-collapsed', 'view-minimal');
-    updateViewCsk();
+    if (!preserveNav) {
+      collapseState = 0;
+      collapsedFocusIdx = 0;
+      el.content.classList.remove('view-collapsed', 'view-sec-collapsed', 'view-minimal');
+      updateViewCsk();
+    } else if (savedCollapse > 0) {
+      collapseState = savedCollapse;
+      el.content.classList.toggle('view-collapsed', collapseState === 1);
+      el.content.classList.toggle('view-sec-collapsed', collapseState === 2);
+      el.content.classList.toggle('view-minimal', collapseState === 3);
+      updateViewCsk();
+    }
     if (togBtn) {
       togBtn.className = 'view-tb-toggle';
       togBtn.onclick = function() {
@@ -361,13 +414,61 @@
     };
   }
 
+  function wireProgrammableSection(rec, all) {
+    var slot = document.getElementById('view-pr-obligations');
+    if (!slot || !global.WPProgrammableReceive) return;
+    var body = WPProgrammableReceive.renderViewSection(rec, all);
+    if (!body) {
+      slot.parentNode && slot.parentNode.removeChild(slot);
+      return;
+    }
+    slot.outerHTML = '<div class="view-section" id="vsec-programmable">' +
+      '<div class="view-sec-hdr">Obligations</div>' +
+      '<div class="view-sec-body">' + body + '</div></div>';
+  }
+
+  function wireActionReceiveBar(rec, all) {
+    var bar = document.getElementById('view-action-receive-bar');
+    if (!bar) return;
+    function paint(all) {
+      if (global.WPNocGatekeeper && WPNocGatekeeper.needsGatekeeperReceive(rec, all)) {
+        bar.style.display = 'block';
+        bar.innerHTML = '<button type="button" class="view-action-btn" id="view-gk-receive-btn">' +
+          'Gatekeeper — respond to relay</button>';
+        var gkBtn = document.getElementById('view-gk-receive-btn');
+        if (gkBtn) gkBtn.onclick = function() {
+          App.showGatekeeperReceive({ parentRecord: rec });
+        };
+        return;
+      }
+      if (!global.WPChainExecution) return;
+      if (!WPChainExecution.parseActionList(rec).length) return;
+      if (!WPChainExecution.needsActionReceive(rec, all)) return;
+      bar.style.display = 'block';
+      bar.innerHTML = '<button type="button" class="view-action-btn" id="view-action-receive-btn">' +
+        'Confirm actions (' + WPChainExecution.parseActionList(rec).length + ')</button>';
+      var btn = document.getElementById('view-action-receive-btn');
+      if (btn) btn.onclick = function() { App.showActionReceive({ parentRecord: rec }); };
+    }
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    if (all) paint(all);
+    else RecordService.list().then(paint);
+  }
+
   // ── Main render ──────────────────────────────────────────────────────────
 
   function render(rec) {
+    var preserveNav = _viewScrollId === rec.id && !!el.content;
+    var savedScroll = preserveNav ? el.content.scrollTop : 0;
+    var savedCollapse = preserveNav ? collapseState : 0;
+
     currentRecord   = rec;
     currentParent   = null;
-    collapseState   = 0;
-    collapsedFocusIdx = 0;
+    if (!preserveNav) {
+      collapseState = 0;
+      collapsedFocusIdx = 0;
+    }
     el.title.textContent = rec.job || '(untitled)';
     updateViewCsk();
 
@@ -377,7 +478,11 @@
       ? ((rt || rec.recordType || 'entry').toUpperCase())
       : recordDesignation(rec);
 
-    var html = '<div class="view-paper" id="view-sec-top">';
+    var spineHtml = (global.GlyphCard && GlyphCard.spineMarginHtml)
+      ? GlyphCard.spineMarginHtml(rec) : '';
+    var cardHtml = (global.GlyphCard && GlyphCard.renderViewCard)
+      ? GlyphCard.renderViewCard(rec) : '';
+    var html = spineHtml + '<div class="view-paper' + (spineHtml ? ' view-with-spine' : '') + '" id="view-sec-top">';
 
     var progressions = getProgressionItems(rec);
     var progBadge = progressions
@@ -386,17 +491,40 @@
     html += '<div class="view-paper-header">' +
       progBadge +
       (typeLabel ? '<span class="view-rec-type">' + esc(typeLabel) + '</span>' : '') +
+      (global.WPChainExecution ? WPChainExecution.codecBadgeHtml(rec) : '') +
       '</div>';
+    html += '<div id="view-action-receive-bar" class="view-action-bar" style="display:none"></div>';
+    if (cardHtml) html += cardHtml;
     if (lifecycleStripOn() && isLifecycleType(rt)) {
       html += '<div id="view-lifecycle-wrap" class="view-lifecycle-wrap"></div>';
     }
 
+    if (rec._templateQr) {
+      var tqLbl = (global.WPTemplateQr && rec.displaySchema)
+        ? WPTemplateQr.displayLabel(rec.displaySchema) : 'Template QR';
+      html += '<div class="view-trig-banner">Received via #1dt/ · ' + esc(tqLbl) + '</div>';
+    }
+    if (global.WPRelationalUi) {
+      var symBanner = WPRelationalUi.inlineEntryBanner(rec);
+      if (symBanner) {
+        html += '<div class="view-trig-banner">' + esc(symBanner) + '</div>';
+      }
+      if (rec.relational_mode || rec._codec_v4) {
+        var pk = WPRelationalUi.peerKeyForRecord(rec);
+        var st = global.WPSymbolTable ? WPSymbolTable.stats(pk) : { entries: 0, pending: 0 };
+        html += '<div class="view-field" id="view-symbols-row" style="cursor:pointer;">' +
+          '<div class="view-field-label">Symbol table</div>' +
+          '<div class="view-field-value">' + st.entries + ' known · peer ' +
+          esc(WPSymbolTable.peerLabelForKey(pk, {})) +
+          ' <span class="badge">Manage</span></div></div>';
+      }
+    }
     if (rec.trigDisplay) {
       if (rec.trigDisplay.trig_violation) {
         html += '<div class="view-trig-banner">Display rules invalid (TRIG length)</div>';
       } else if (!rec.trigDisplay.show) {
         html += '<div class="view-trig-banner">Hidden by display trigger</div>';
-      } else if (rec.displaySchema) {
+      } else if (rec.displaySchema && !rec._templateQr) {
         var dsLbl = ['Standard', 'Billboard', 'Form', 'Form+QR'][rec.displaySchema.displayType || 0];
         html += '<div class="view-trig-banner">Presentation: ' + esc(dsLbl) + '</div>';
       }
@@ -435,6 +563,29 @@
     }
     if (processBody) {
       html += viewSection('vsec-process', 'Process', processBody);
+    }
+
+    if (global.WPProgrammableReceive && WPProgrammableReceive.hasRules(rec)) {
+      html += '<div id="view-pr-obligations"></div>';
+    } else if (Array.isArray(rec._programmablePlain) && rec._programmablePlain.length) {
+      var prBody = '';
+      var pri;
+      for (pri = 0; pri < rec._programmablePlain.length; pri++) {
+        prBody += viewRow('Rule ' + (pri + 1), esc(rec._programmablePlain[pri]));
+      }
+      html += viewSection('vsec-programmable', 'Obligations', prBody);
+    } else if (Array.isArray(rec.programmable_rules) && rec.programmable_rules.length &&
+        global.WPProgrammableRules) {
+      var hints = WPProgrammableRules.describeAll(rec.programmable_rules);
+      var prBody2 = '';
+      for (pri = 0; pri < hints.length; pri++) {
+        prBody2 += viewRow('Rule ' + (pri + 1), esc(hints[pri]));
+      }
+      html += viewSection('vsec-programmable', 'Obligations', prBody2);
+    }
+
+    if (rec.informational_ack) {
+      html += '<div class="view-trig-banner">Light acknowledgement — no per-action list required</div>';
     }
 
     // Actions section — each action is its own .view-field for collapsed navigation
@@ -492,6 +643,15 @@
         '<div class="view-sec-hdr">' + esc(TYPE_LABELS[rt] || rt) + '</div>' +
         '<div class="view-sec-body" id="view-io-card"></div>' +
       '</div>';
+      html += '<div class="view-section" id="vsec-social">' +
+        '<div class="view-sec-hdr">Social trail</div>' +
+        '<div class="view-sec-body" id="view-social-trail"></div>' +
+      '</div>';
+    } else if (rt === 'contact') {
+      html += '<div class="view-section" id="vsec-social">' +
+        '<div class="view-sec-hdr">Social trail</div>' +
+        '<div class="view-sec-body" id="view-social-trail"></div>' +
+      '</div>';
     } else {
       html += '<div class="view-section" id="vsec-fin">' +
         '<div class="view-sec-hdr">Financials</div>' +
@@ -504,6 +664,22 @@
       html += '<div id="view-chain-docs"></div>';
     }
     el.content.innerHTML = html;
+    RecordService.list().then(function(all) {
+      wireProgrammableSection(rec, all);
+      wireActionReceiveBar(rec, all);
+    });
+
+    var symRow = document.getElementById('view-symbols-row');
+    if (symRow && global.App && App.showSymbols && global.WPRelationalUi) {
+      symRow.addEventListener('click', function() {
+        App.showSymbols({
+          peerKey: WPRelationalUi.peerKeyForRecord(rec),
+          peerLabel: rec.customer || rec.job,
+          record: rec,
+          returnTo: 'view',
+        });
+      });
+    }
 
     // Wire progression badge (only present when progressions exist)
     var progBadgeEl = document.getElementById('view-prog-badge');
@@ -513,10 +689,16 @@
 
     WorkpadsPanel.setContext({ screen: 'view', record: rec });
 
-    populateViewToolbar(rec);
+    populateViewToolbar(rec, preserveNav, savedCollapse);
+    _viewScrollId = rec.id;
+    if (preserveNav) scheduleViewScrollRestore(rec, savedScroll, savedCollapse);
     loadParentSuperLabel(rec);
-    if (isIORecordType(rt)) loadIOCard(rec);
-    else loadFinancialCard(rec);
+    if (isIORecordType(rt)) {
+      loadIOCard(rec);
+      loadSocialTrail(rec);
+    } else {
+      loadFinancialCard(rec);
+    }
     loadLifecycleUI(rec);
 
     // Chain state enrichment — runs for all records that have a chainRef
@@ -656,6 +838,42 @@
     });
   }
 
+  function loadSocialTrail(rec) {
+    var el = document.getElementById('view-social-trail');
+    var sec = document.getElementById('vsec-social');
+    if (!el || currentRecord !== rec) return;
+    if (!global.SocialLedger) {
+      if (sec) sec.style.display = 'none';
+      return;
+    }
+    var rt = rec.record_type || '';
+    var entries = [];
+    if (rt === 'contact') {
+      RecordService.list().then(function(all) {
+        if (currentRecord !== rec) return;
+        entries = SocialLedger.entriesForContact(rec.id, all, { limit: 10 });
+        if (!entries.length) {
+          if (sec) sec.style.display = 'none';
+          return;
+        }
+        if (sec) sec.style.display = '';
+        el.innerHTML = SocialLedger.renderTrailHtml(entries, { max: 8 });
+      });
+      return;
+    }
+    if (!isIORecordType(rt)) {
+      if (sec) sec.style.display = 'none';
+      return;
+    }
+    entries = SocialLedger.entriesForRecord(rec, { limit: 10 });
+    if (!entries.length) {
+      if (sec) sec.style.display = 'none';
+      return;
+    }
+    if (sec) sec.style.display = '';
+    el.innerHTML = SocialLedger.renderTrailHtml(entries, { max: 8 });
+  }
+
   function loadIOCard(rec) {
     var card = document.getElementById('view-io-card');
     if (!card || currentRecord !== rec) return;
@@ -677,8 +895,19 @@
     if (rt === 'connection') {
       if (rec.relay_to) html += viewRow('Point toward', esc(rec.relay_to));
       if (rec.relay_note) html += viewRow('Relay note', esc(rec.relay_note));
-      html += viewRow('Ack', esc(rec.connection_ack || 'pending'));
-      html += '<div class="view-field-value" style="font-size:11px;color:var(--text-muted);padding:4px 0;">Bridge only — cannot post an Offer from here.</div>';
+      if (global.WPNocGatekeeper) {
+        html += viewRow('Gatekeeper', esc(WPNocGatekeeper.policyLabel(WPNocGatekeeper.getGateType(rec))));
+      }
+      html += viewRow('Relay ack', esc(rec.connection_ack || 'pending'));
+      if (rec.gatekeeper_sale_confirmed) {
+        html += viewRow('Sale', 'Confirmed');
+      }
+      html += '<div class="view-field-value" style="font-size:11px;color:var(--text-muted);padding:4px 0;">Bridge — menu: Offer, Confirm relay, Gatekeeper.</div>';
+      var pend = SocialLedger ? SocialLedger.entriesForRecord(rec).filter(SocialLedger.isPending).length : 0;
+      if (pend) {
+        html += '<div class="view-field-value" style="color:var(--warn);font-size:11px;">' +
+          pend + ' open social ack(s) on trail</div>';
+      }
     }
     card.innerHTML = html || '<div class="view-field-value">—</div>';
   }
@@ -827,18 +1056,92 @@
 
     optionsItems = [
       { key: '1', label: 'Edit',             action: function() { App.showWizard(rec); } },
-      { key: '2', label: 'Share',            action: function() { App.showShare(rec); } },
+      { key: '2', label: 'Share',            action: function() {
+        var meta = {};
+        if (global.WPNfcHandoff) meta.nfcScenario = WPNfcHandoff.scenarioForRecord(rec);
+        App.showShare(rec, meta);
+      } },
+    ];
+    if (global.WPPrintRecord) {
+      optionsItems.push({
+        key: '',
+        label: 'Print summary',
+        action: function() {
+          var text = WPPrintRecord.formatText(rec);
+          if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function() {
+              alert('Summary copied to clipboard.');
+            }, function() { alert(text); });
+          } else {
+            alert(text);
+          }
+        },
+      });
+    }
+    optionsItems = optionsItems.concat([
       { key: '3', label: 'Financials',       action: function() { App.showFinancial(rec); } },
       { key: '4', label: 'View chain',       action: function() { App.showChain({ chainRef: rec.chainRef, sourceId: rec.id }); } },
       { key: '5', label: 'Archive record',   action: doArchive },
       { key: '6', label: 'Save as template', action: doSaveAsTemplate },
-    ];
+    ]);
+    if (!isContact && !isLocked && global.WPProgrammableCompose) {
+      optionsItems.push({
+        key: '0',
+        label: 'Edit obligations',
+        action: function() {
+          App.showWizard(rec, { startScreen: 3, entryRecord: rec });
+        },
+      });
+    }
+    if (global.App && App.showSymbols && global.WPRelationalUi) {
+      optionsItems.push({
+        key: '',
+        label: 'Symbol table',
+        action: function() {
+          App.showSymbols({
+            peerKey: WPRelationalUi.peerKeyForRecord(rec),
+            record: rec,
+            returnTo: 'view',
+          });
+        },
+      });
+    }
 
     if (ioRec) {
       optionsItems = optionsItems.filter(function(o) { return o.key !== '3'; });
     }
     if (rt === 'connection' && rec.connection_ack !== 'confirmed') {
       optionsItems.unshift({ key: '', label: 'Confirm relay', action: doConfirmConnection });
+    }
+    if (rt === 'connection' && global.WPNocGatekeeper && WPNocGatekeeper.getGateType(rec) === 'sale_confirmed' &&
+        !rec.gatekeeper_sale_confirmed) {
+      optionsItems.unshift({
+        key: '',
+        label: 'Mark sale confirmed',
+        action: function() {
+          WPNocGatekeeper.markSaleConfirmed(rec).then(function(updated) {
+            App.showView(updated || rec);
+          });
+        },
+      });
+    }
+    if (rt === 'connection' && rec.receivedAt && global.App && App.showGatekeeperReceive) {
+      optionsItems.unshift({
+        key: '',
+        label: 'Gatekeeper respond',
+        action: function() {
+          RecordService.list().then(function(all) {
+            if (WPNocGatekeeper.needsGatekeeperReceive(rec, all)) {
+              App.showGatekeeperReceive({ parentRecord: rec });
+            } else {
+              alert('No gatekeeper response needed.');
+            }
+          });
+        },
+      });
+    }
+    if (rt === 'connection') {
+      optionsItems.unshift({ key: '', label: 'Create offer', action: doCreateOfferFromConnection });
     }
 
     if (!isContact && !isLocked && !isChild) {
@@ -854,6 +1157,7 @@
 
     optionsIdx = 0;
     optionsOpen = true;
+    optionsScrollReset = true;
     renderOptions();
     document.getElementById('overlay-options').style.display = 'flex';
   }
@@ -879,7 +1183,10 @@
         selectOption();
       });
     }
-    listEl.scrollTop = 0;
+    if (optionsScrollReset) {
+      listEl.scrollTop = 0;
+      optionsScrollReset = false;
+    }
     var focused = listEl.children[optionsIdx];
     if (focused) focused.scrollIntoView({ block: 'nearest' });
   }
@@ -1143,7 +1450,7 @@
       ackForId:     rec.id,
       draft:        false,
     }).then(function(ackRec) {
-      App.showShare(ackRec);
+      App.showShare(ackRec, { nfcScenario: 'ack_return' });
     });
   }
 

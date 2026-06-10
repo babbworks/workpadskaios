@@ -1,6 +1,6 @@
 # TAG-REFERENCE — pads-v1 URL Tag Reference
 
-**As of:** 2026-05-17  
+**As of:** 2026-05-24  
 **Status:** Permanent reference — update when new tags are added  
 **Depends on:** FRAME-SPEC.md, OPEN-QUESTIONS.md §OQ-32  
 **Future location:** `dev_refs/TAG-REFERENCE.md`
@@ -49,6 +49,7 @@ For scrambled tags (`#1ps/`, `#1ph/`, `#1pt/`), a security wrapper is applied af
 | Tag | Full name | Wire content | Security level | JS permitted | Public circulation? | Notes |
 |-----|-----------|-------------|----------------|--------------|---------------------|-------|
 | `#1pa/` | Plain record | pads-v1 frame, no wrapper | None | No | Only to named recipients | Standard financial, service, and contact records |
+| `#1pv/` | pads-v2 record | Path C header + group payload (see `FRAME-SPEC-1pv-ADDENDUM.md`) | None | No | Named recipients | **Encode default** when supported; dual-decode with `1pa/`. Not `1pb/` (billboard). |
 | `#1pb/` | Public billboard | pads-v1 frame with display_schema | None | No | Yes — safe for public URLs, QR codes, broadcast | Non-financial only. Never carries executable logic. |
 | `#1pf/` | Financial presentation | pads-v1 frame with display_schema | None (combine with `#1ps/` or `#1pt/`) | Yes (with `#1ps/` or `#1pt/`) | No — named recipients only | Invoice views, statements, pay summaries. Share-sheet warns before generating. |
 | `#1ps/` | Full scramble | pads-v1 frame inside AES-CTR + field scramble wrapper | Strong — per-contact passphrase | Yes | No | Private/colleague records, cost data, pay records. Required for `worker_amount` and EXPENSE_CAT=01/10. |

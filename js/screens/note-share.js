@@ -33,8 +33,19 @@
     tplIdx     = 0;
     currentUrl = null;
 
-    templates = TemplateRegistry.query({ type: 'note', cached: true });
+    if (global.WPPresentationLibrary) {
+      WPPresentationLibrary.ensureBundled();
+      templates = WPPresentationLibrary.noteTemplates();
+    } else {
+      templates = TemplateRegistry.query({ type: 'note', cached: true });
+    }
     if (!templates.length) templates = [TemplateRegistry.getEntry(TemplateRegistry.BUILTIN_URI)];
+
+    if (cap._preferredTpl) {
+      for (var ti = 0; ti < templates.length; ti++) {
+        if (templates[ti].uri === cap._preferredTpl) { tplIdx = ti; break; }
+      }
+    }
 
     if (cap.linkedRecordId) {
       RecordService.get(cap.linkedRecordId).then(function(rec) {

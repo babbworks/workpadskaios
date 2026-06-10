@@ -57,7 +57,7 @@
     if (el.title) el.title.textContent = 'New ' + outcomeLabel();
     var lbl = outcomeLabel();
     el.content.innerHTML =
-      '<div class="io-create-hdr">The need stated</div>' +
+      '<div class="io-create-hdr">The need stated — saves as Need</div>' +
       '<div class="field-group field-focused">' +
         '<div class="field-label">' + esc(lbl) + '</div>' +
         '<textarea class="field-input io-outcome-input" id="io-outcome" rows="4" ' +
@@ -150,15 +150,22 @@
     saving = true;
     var workerName = selectedWorker ? (selectedWorker.customer || selectedWorker.job || '') : '';
     var fields = {
-      record_type: '',
+      record_type: 'need',
       job: job,
+      date: new Date().toISOString().slice(0, 10),
+      chain_mode: 'INITIATING',
+      relationship: 'creates',
       draft: !doShare,
     };
     if (workerName) {
+      fields.customer = workerName;
       fields.worker = workerName;
       fields.participants = [{ name: workerName, role: 'worker' }];
     }
-    if (doShare) fields.tag = '';
+    if (selectedWorker && selectedWorker.id) {
+      fields.linkedContactId = selectedWorker.id;
+    }
+    if (doShare) fields.tag = '1pv';
 
     RecordService.create(fields).then(function(rec) {
       saving = false;

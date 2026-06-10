@@ -48,6 +48,32 @@
   var actionFocusIdx   = 0;
   var backFocused      = false;
   var finTab           = 0;   // 0=Amount, 1=Expenses, 2=Payments
+  var _scrollAnchor    = { key: '', top: 0 };
+
+  function scrollAnchorKey() {
+    var id = currentRecord && currentRecord.id;
+    return id ? (id + ':' + currentScreen + ':' + finTab) : '';
+  }
+
+  function preserveContentScroll(run) {
+    var key = scrollAnchorKey();
+    var keep = key && key === _scrollAnchor.key && el.content;
+    var top = keep ? _scrollAnchor.top : 0;
+    run();
+    if (!el.content || !key) return;
+    if (keep) {
+      el.content.scrollTop = top;
+      var t = top;
+      setTimeout(function() {
+        if (scrollAnchorKey() === key && el.content) el.content.scrollTop = t;
+      }, 0);
+      setTimeout(function() {
+        if (scrollAnchorKey() === key && el.content) el.content.scrollTop = t;
+      }, 100);
+    }
+    _scrollAnchor.key = key;
+    _scrollAnchor.top = keep ? top : el.content.scrollTop;
+  }
   var cachedChildren   = [];  // child records loaded from DB (expenses + payments)
   var finFocusIdx      = 0;
   var entryRecord      = null; // set when editing from view — used for goBack / post-save nav
@@ -63,6 +89,11 @@
   var finLineEditIdx   = -1;
   var cachedContacts   = null;  // null=not loaded; []=no contacts; [...]=contacts
   var progressiveExpanded = false;
+
+  function wizProgEditor() {
+    return (global.WPProgrammableCompose && WPProgrammableCompose.getEditor)
+      ? WPProgrammableCompose.getEditor('wizard') : null;
+  }
 
   function useProgressiveForm() {
     return global.ProgressiveForm && ProgressiveForm.enabled() &&
@@ -306,6 +337,8 @@
     var actSel = document.getElementById('f-activity-id');
     if (actSel !== null) currentRecord.activityId = actSel.value || undefined;
     currentRecord.actions = actions.slice();
+    var progEd = wizProgEditor();
+    if (progEd) progEd.syncToRecord(currentRecord);
     // Financial fields (screen 4)
     var finIds = ['fin-record_type', 'fin-amount', 'fin-currency', 'fin-vat', 'fin-due_date', 'fin-qty_unit', 'fin-qty', 'fin-rate', 'fin-custom_tax_rate',
                   'fin-service_ref', 'fin-expiry_date', 'fin-worker_amount'];
@@ -383,8 +416,9 @@
       html += '<div class="field-group"><div class="field-label">Activity</div>' +
         '<select class="field-input" id="f-activity-id"><option value="">— None —</option>' +
         acts.map(function(a) {
+          var lbl = (typeof WPActivityTaxonomy !== 'undefined') ? WPActivityTaxonomy.optionLabel(a) : a.name;
           return '<option value="' + esc(a.id) + '"' + (a.id === (r.activityId || '') ? ' selected' : '') + '>' +
-            esc(a.name) + '</option>';
+            esc(lbl) + '</option>';
         }).join('') +
         '</select></div>';
     }
@@ -710,7 +744,8 @@
       actSelectHtml = '<div class="field-group"><div class="field-label">Activity</div>' +
         '<select class="field-input" id="f-activity-id"><option value="">— None —</option>' +
         acts.map(function(a) {
-          return '<option value="' + esc(a.id) + '"' + (a.id === (r.activityId || '') ? ' selected' : '') + '>' + esc(a.name) + '</option>';
+          var lbl = (typeof WPActivityTaxonomy !== 'undefined') ? WPActivityTaxonomy.optionLabel(a) : a.name;
+          return '<option value="' + esc(a.id) + '"' + (a.id === (r.activityId || '') ? ' selected' : '') + '>' + esc(lbl) + '</option>';
         }).join('') +
         '</select></div>';
     }
@@ -822,6 +857,21 @@
           esc(r.details || '') + '</textarea>' +
       '</div>' +
       fieldGroup('attachment', 'Attachment URL', r.attachment || '');
+    var progHtml = '';
+    var progEd = wizProgEditor();
+    if (progEd) {
+      progEd.load(r);
+      progEd.getActions = function() { return actions; };
+      progHtml = '<div id="wiz-prog-root">' + progEd.renderHtml(r, 'wiz-prog') + '</div>';
+    }
+    el.content.innerHTML += progHtml;
+    if (progEd) {
+      var progRoot = document.getElementById('wiz-prog-root');
+      progEd.wire(progRoot, r, 'wiz-prog', function() {
+        readInputs();
+        renderStory();
+      });
+    }
     var first = document.getElementById('f-story');
     if (first) first.focus();
     finishRenderLens();
@@ -1148,6 +1198,10 @@
   }
 
   function renderFinancial() {
+    preserveContentScroll(function() { renderFinancialBody(); });
+  }
+
+  function renderFinancialBody() {
     var ioHdr = useInOutFrame()
       ? InOutFrame.frameHeader('Outputs', 'Money and flows out')
       : '';
@@ -1489,44 +1543,46 @@
 
   function renderCurrentScreen() {
     readInputs();
-    if (currentScreen !== 2) { partAddOpen = false; partEditIdx = -1; }
-    if (currentScreen !== 4) { finLineAddOpen = false; finLineEditIdx = -1; }
-    updateProgress();
-    updateSoftkeys();
-    updateTypeTag();
-    if (isContactType(currentRecord)) {
-      switch (currentScreen) {
-        case 0: renderContactIdentity(); break;
-        case 1: renderContactDetails();  break;
-        case 2: renderContactNotes();    break;
-      }
-    } else if (useInOutFrame()) {
-      var kind = InOutFrame.renderKind(currentScreen, currentRecord);
-      if (kind === 'outcome') renderProcess();
-      else if (kind === 'inputs') {
-        if (!isPadsClass(currentRecord)) actionFocusIdx = actions.length;
-        renderInOutInputs();
-      } else if (kind === 'outputs') {
-        finFocusIdx = 0;
-        renderFinancial();
-      } else renderStory();
-    } else {
-      switch (currentScreen) {
-        case 0: renderProcess();  break;
-        case 1:
+    preserveContentScroll(function() {
+      if (currentScreen !== 2) { partAddOpen = false; partEditIdx = -1; }
+      if (currentScreen !== 4) { finLineAddOpen = false; finLineEditIdx = -1; }
+      updateProgress();
+      updateSoftkeys();
+      updateTypeTag();
+      if (isContactType(currentRecord)) {
+        switch (currentScreen) {
+          case 0: renderContactIdentity(); break;
+          case 1: renderContactDetails();  break;
+          case 2: renderContactNotes();    break;
+        }
+      } else if (useInOutFrame()) {
+        var kind = InOutFrame.renderKind(currentScreen, currentRecord);
+        if (kind === 'outcome') renderProcess();
+        else if (kind === 'inputs') {
           if (!isPadsClass(currentRecord)) actionFocusIdx = actions.length;
-          renderActions();
-          break;
-        case 2: renderDetails();  break;
-        case 3: renderStory();    break;
-        case 4:
-          if (hasFinancialStep()) {
-            finFocusIdx = 0;
-            renderFinancial();
-          }
-          break;
+          renderInOutInputs();
+        } else if (kind === 'outputs') {
+          finFocusIdx = 0;
+          renderFinancial();
+        } else renderStory();
+      } else {
+        switch (currentScreen) {
+          case 0: renderProcess();  break;
+          case 1:
+            if (!isPadsClass(currentRecord)) actionFocusIdx = actions.length;
+            renderActions();
+            break;
+          case 2: renderDetails();  break;
+          case 3: renderStory();    break;
+          case 4:
+            if (hasFinancialStep()) {
+              finFocusIdx = 0;
+              renderFinancial();
+            }
+            break;
+        }
       }
-    }
+    });
     WorkpadsPanel.setContext({ screen: 'wizard', wizardScreen: currentScreen, record: currentRecord });
   }
 
@@ -1642,6 +1698,8 @@
     backFocused      = false;
     entryRecord      = record || null;
     actions          = (record && record.actions) ? record.actions.slice() : [];
+    var progEdInit = wizProgEditor();
+    if (progEdInit) progEdInit.load(record || null);
     bindTypeTag();
 
     if (record) {

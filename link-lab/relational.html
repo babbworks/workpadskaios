@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workpads — relational size</title>
+  <link rel="stylesheet" href="css/link-lab.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="hdr">
+      <h1>Relational ext</h1>
+      <p>Compare 1st vs simulated 10th exchange deflate size (V4-7).</p>
+    </header>
+    <p class="nav"><a href="index.html">Hub</a></p>
+
+    <div class="card">
+      <h2>Record JSON</h2>
+      <textarea id="json" rows="8"></textarea>
+      <label style="margin-top:8px"><input type="checkbox" id="rel" checked> relationalMode + profile + symbol</label>
+      <div class="btn-row">
+        <button type="button" class="primary" id="btn-run">Run comparison</button>
+        <button type="button" id="btn-encode">Encode #1pv</button>
+      </div>
+    </div>
+
+    <div id="status"></div>
+    <div id="out"></div>
+  </div>
+
+  <script src="../js/lib/fflate.js"></script>
+  <script src="../js/lib/domain-profile.js"></script>
+  <script src="../js/lib/symbol-table.js"></script>
+  <script src="../js/lib/pathc-v2.js"></script>
+  <script src="../js/lib/compression-metrics.js"></script>
+  <script src="../js/lib/codec.js"></script>
+  <script src="js/lab-common.js"></script>
+  <script src="js/relational-page.js"></script>
+</body>
+</html>
